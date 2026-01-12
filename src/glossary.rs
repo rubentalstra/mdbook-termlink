@@ -20,6 +20,10 @@ pub struct Term {
     anchor: String,
     /// Optional short form for terms like "API (Application Programming Interface)".
     short_name: Option<String>,
+    /// The definition text for this term (used for tooltip preview).
+    definition: Option<String>,
+    /// Additional aliases configured in book.toml.
+    aliases: Vec<String>,
 }
 
 impl Term {
@@ -42,7 +46,24 @@ impl Term {
             name,
             anchor,
             short_name,
+            definition: None,
+            aliases: Vec::new(),
         }
+    }
+
+    /// Creates a new term with a definition.
+    #[must_use]
+    pub fn with_definition(name: impl Into<String>, definition: Option<String>) -> Self {
+        let mut term = Self::new(name);
+        term.definition = definition;
+        term
+    }
+
+    /// Adds aliases to this term.
+    #[must_use]
+    pub fn with_aliases(mut self, aliases: Vec<String>) -> Self {
+        self.aliases = aliases;
+        self
     }
 
     /// Returns the full term name as it appears in the glossary.
@@ -65,15 +86,24 @@ impl Term {
         self.short_name.as_deref()
     }
 
+    /// Returns the definition text for this term (if available).
+    ///
+    /// Used for tooltip preview on hover.
+    #[must_use]
+    pub fn definition(&self) -> Option<&str> {
+        self.definition.as_deref()
+    }
+
     /// Returns all searchable forms of this term.
     ///
-    /// This includes the full name and the short name (if present).
+    /// This includes the full name, short name (if present), and any aliases.
     #[must_use]
     pub fn searchable_forms(&self) -> Vec<&str> {
         let mut forms = vec![self.name.as_str()];
         if let Some(ref short) = self.short_name {
             forms.push(short.as_str());
         }
+        forms.extend(self.aliases.iter().map(String::as_str));
         forms
     }
 }
@@ -113,7 +143,10 @@ fn parse_definition_lists(content: &str) -> Vec<Term> {
 
     let mut in_definition_list = false;
     let mut in_title = false;
+    let mut in_definition = false;
     let mut current_title_text = String::new();
+    let mut current_definition_text = String::new();
+    let mut pending_title: Option<String> = None;
 
     for event in parser {
         match event {
@@ -122,25 +155,64 @@ fn parse_definition_lists(content: &str) -> Vec<Term> {
             }
             Event::End(TagEnd::DefinitionList) => {
                 in_definition_list = false;
+                // Handle any pending term without definition
+                if let Some(title) = pending_title.take()
+                    && !title.is_empty()
+                {
+                    terms.push(Term::new(title));
+                }
             }
             Event::Start(Tag::DefinitionListTitle) => {
                 if in_definition_list {
+                    // If we have a pending term, save it before starting a new one
+                    if let Some(title) = pending_title.take()
+                        && !title.is_empty()
+                    {
+                        let definition = if current_definition_text.trim().is_empty() {
+                            None
+                        } else {
+                            Some(current_definition_text.trim().to_string())
+                        };
+                        terms.push(Term::with_definition(title, definition));
+                    }
                     in_title = true;
                     current_title_text.clear();
+                    current_definition_text.clear();
                 }
             }
             Event::End(TagEnd::DefinitionListTitle) => {
                 if in_title {
-                    let title = current_title_text.trim().to_string();
-                    if !title.is_empty() {
-                        terms.push(Term::new(title));
-                    }
+                    pending_title = Some(current_title_text.trim().to_string());
                     in_title = false;
+                }
+            }
+            Event::Start(Tag::DefinitionListDefinition) => {
+                if in_definition_list {
+                    in_definition = true;
+                }
+            }
+            Event::End(TagEnd::DefinitionListDefinition) => {
+                if in_definition {
+                    in_definition = false;
+                    // Apply definition to pending term and save it
+                    if let Some(title) = pending_title.take()
+                        && !title.is_empty()
+                    {
+                        let definition = if current_definition_text.trim().is_empty() {
+                            None
+                        } else {
+                            Some(current_definition_text.trim().to_string())
+                        };
+                        terms.push(Term::with_definition(title, definition));
+                        current_definition_text.clear();
+                    }
                 }
             }
             Event::Text(text) | Event::Code(text) => {
                 if in_title {
                     current_title_text.push_str(&text);
+                } else if in_definition {
+                    current_definition_text.push_str(&text);
                 }
             }
             _ => {}
@@ -259,6 +331,24 @@ mod tests {
         assert_eq!(term.name(), "API (Application Programming Interface)");
         assert_eq!(term.anchor(), "api-application-programming-interface");
         assert_eq!(term.short_name(), Some("API"));
+        assert_eq!(term.definition(), None);
+    }
+
+    #[test]
+    fn test_term_with_definition() {
+        let term = Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        assert_eq!(term.name(), "API");
+        assert_eq!(term.definition(), Some("Application Programming Interface"));
+    }
+
+    #[test]
+    fn test_term_with_aliases() {
+        let term = Term::new("API").with_aliases(vec!["apis".to_string(), "api endpoint".to_string()]);
+        let forms = term.searchable_forms();
+        assert_eq!(forms.len(), 3);
+        assert!(forms.contains(&"API"));
+        assert!(forms.contains(&"apis"));
+        assert!(forms.contains(&"api endpoint"));
     }
 
     #[test]
@@ -276,6 +366,15 @@ mod tests {
         let forms = term.searchable_forms();
         assert_eq!(forms.len(), 1);
         assert!(forms.contains(&"XPT"));
+    }
+
+    #[test]
+    fn test_term_searchable_forms_with_aliases() {
+        let term = Term::new("REST").with_aliases(vec!["RESTful".to_string()]);
+        let forms = term.searchable_forms();
+        assert_eq!(forms.len(), 2);
+        assert!(forms.contains(&"REST"));
+        assert!(forms.contains(&"RESTful"));
     }
 
     #[test]
@@ -299,12 +398,15 @@ XPT
         assert_eq!(terms[0].name(), "API (Application Programming Interface)");
         assert_eq!(terms[0].short_name(), Some("API"));
         assert_eq!(terms[0].anchor(), "api-application-programming-interface");
+        assert_eq!(terms[0].definition(), Some("A set of protocols for building software."));
 
         assert_eq!(terms[1].name(), "REST");
         assert_eq!(terms[1].anchor(), "rest");
+        assert_eq!(terms[1].definition(), Some("Representational State Transfer."));
 
         assert_eq!(terms[2].name(), "XPT");
         assert_eq!(terms[2].anchor(), "xpt");
+        assert_eq!(terms[2].definition(), Some("SAS Transport file format."));
     }
 
     #[test]

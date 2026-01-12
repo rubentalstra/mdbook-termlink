@@ -158,6 +158,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -255,10 +261,11 @@ dependencies = [
 
 [[package]]
 name = "mdbook-termlink"
-version = "0.0.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "env_logger",
+ "glob",
  "log",
  "mdbook-preprocessor",
  "pretty_assertions",

@@ -152,12 +152,17 @@ fn replace_terms_in_text(
         };
 
         if let Some(mat) = regex.find(&result) {
-            // Build replacement link
+            // Build replacement link with optional title attribute for tooltip
             let matched_text = &result[mat.start()..mat.end()];
+            let title_attr = term
+                .definition()
+                .map(|d| format!(r#" title="{}""#, html_escape(d)))
+                .unwrap_or_default();
             let link = format!(
-                r#"<a href="{}#{}" class="{}">{}</a>"#,
+                r#"<a href="{}#{}"{} class="{}">{}</a>"#,
                 glossary_path,
                 term.anchor(),
+                title_attr,
                 config.css_class(),
                 html_escape(matched_text),
             );
@@ -166,13 +171,15 @@ fn replace_terms_in_text(
             if config.link_first_only() {
                 result = format!("{}{}{}", &result[..mat.start()], link, &result[mat.end()..]);
             } else {
-                // Replace all occurrences
+                // Replace all occurrences - need to capture title_attr for closure
+                let title_attr_clone = title_attr.clone();
                 result = regex
                     .replace_all(&result, |caps: &regex::Captures| {
                         format!(
-                            r#"<a href="{}#{}" class="{}">{}</a>"#,
+                            r#"<a href="{}#{}"{} class="{}">{}</a>"#,
                             glossary_path,
                             term.anchor(),
+                            title_attr_clone,
                             config.css_class(),
                             html_escape(&caps[0]),
                         )
@@ -320,5 +327,66 @@ mod tests {
         // Should only link first occurrence
         assert!(result.contains(r#"<a href="g.html#xpt""#));
         assert_eq!(result.matches("glossary-term").count(), 1);
+    }
+
+    #[test]
+    fn test_replace_terms_with_tooltip() {
+        let term = Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let terms: Vec<&Term> = vec![&term];
+        let config = default_config();
+        let mut linked = HashSet::new();
+
+        let result = replace_terms_in_text(
+            "Use the API for data access.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+
+        // Should include title attribute with definition
+        assert!(result.contains(r#"title="Application Programming Interface""#));
+        assert!(result.contains(r#"<a href="glossary.html#api""#));
+        assert!(result.contains("class=\"glossary-term\""));
+    }
+
+    #[test]
+    fn test_replace_terms_without_tooltip() {
+        let term = Term::new("API"); // No definition
+        let terms: Vec<&Term> = vec![&term];
+        let config = default_config();
+        let mut linked = HashSet::new();
+
+        let result = replace_terms_in_text(
+            "Use the API for data access.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+
+        // Should NOT include title attribute
+        assert!(!result.contains("title="));
+        assert!(result.contains(r#"<a href="glossary.html#api""#));
+    }
+
+    #[test]
+    fn test_replace_terms_with_aliases() {
+        let term = Term::new("REST").with_aliases(vec!["RESTful".to_string()]);
+        let terms: Vec<&Term> = vec![&term];
+        let config = default_config();
+        let mut linked = HashSet::new();
+
+        let result = replace_terms_in_text(
+            "This is a RESTful service.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+
+        // Should link the alias
+        assert!(result.contains(r#"<a href="glossary.html#rest""#));
+        assert!(result.contains("RESTful</a>"));
     }
 }

@@ -1,8 +1,10 @@
 //! Configuration parsing for the termlink preprocessor.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use glob::Pattern;
 use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
 
@@ -10,7 +12,7 @@ use serde::Deserialize;
 ///
 /// All fields are private to allow future changes without breaking the API.
 /// Use the getter methods to access configuration values.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Path to the glossary file relative to src directory.
     glossary_path: PathBuf,
@@ -20,6 +22,10 @@ pub struct Config {
     css_class: String,
     /// Whether term matching should be case-sensitive.
     case_sensitive: bool,
+    /// Glob patterns for pages to exclude from term linking.
+    exclude_pages: Vec<Pattern>,
+    /// Additional aliases for terms (term name -> list of aliases).
+    aliases: HashMap<String, Vec<String>>,
 }
 
 /// Raw configuration as deserialized from book.toml.
@@ -30,6 +36,8 @@ struct RawConfig {
     link_first_only: Option<bool>,
     css_class: Option<String>,
     case_sensitive: Option<bool>,
+    exclude_pages: Option<Vec<String>>,
+    aliases: Option<HashMap<String, Vec<String>>>,
 }
 
 impl Default for Config {
@@ -39,6 +47,8 @@ impl Default for Config {
             link_first_only: true,
             css_class: String::from("glossary-term"),
             case_sensitive: false,
+            exclude_pages: Vec::new(),
+            aliases: HashMap::new(),
         }
     }
 }
@@ -59,6 +69,20 @@ impl Config {
         // Get the termlink config, or use defaults
         let raw = preprocessors.get("termlink").cloned().unwrap_or_default();
 
+        // Parse exclude-pages glob patterns with warnings for invalid patterns
+        let exclude_pages: Vec<Pattern> = raw
+            .exclude_pages
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|p| match Pattern::new(p) {
+                Ok(pattern) => Some(pattern),
+                Err(e) => {
+                    log::warn!("Invalid exclude-pages glob pattern '{p}': {e}");
+                    None
+                }
+            })
+            .collect();
+
         Ok(Self {
             glossary_path: raw
                 .glossary_path
@@ -68,6 +92,8 @@ impl Config {
                 .css_class
                 .unwrap_or_else(|| String::from("glossary-term")),
             case_sensitive: raw.case_sensitive.unwrap_or(false),
+            exclude_pages,
+            aliases: raw.aliases.unwrap_or_default(),
         })
     }
 
@@ -99,6 +125,24 @@ impl Config {
     #[must_use]
     pub fn is_glossary_path(&self, path: &Path) -> bool {
         path == self.glossary_path || path.ends_with(&self.glossary_path)
+    }
+
+    /// Checks if the given path should be excluded from term linking.
+    #[must_use]
+    pub fn should_exclude(&self, path: &Path) -> bool {
+        let path_str = path.to_string_lossy();
+        self.exclude_pages.iter().any(|p| p.matches(&path_str))
+    }
+
+    /// Returns aliases for a term name (if configured).
+    #[must_use]
+    pub fn aliases(&self, term_name: &str) -> Option<&Vec<String>> {
+        self.aliases.get(term_name)
+    }
+
+    /// Returns iterator over all aliases (for conflict detection).
+    pub fn all_aliases(&self) -> impl Iterator<Item = (&String, &Vec<String>)> {
+        self.aliases.iter()
     }
 }
 
@@ -132,5 +176,63 @@ mod tests {
         let config = Config::default();
         assert!(!config.is_glossary_path(Path::new("chapter1.md")));
         assert!(!config.is_glossary_path(Path::new("glossary.md")));
+    }
+
+    #[test]
+    fn test_should_exclude_exact_match() {
+        let config = Config {
+            exclude_pages: vec![Pattern::new("changelog.md").unwrap()],
+            ..Default::default()
+        };
+        assert!(config.should_exclude(Path::new("changelog.md")));
+        assert!(!config.should_exclude(Path::new("chapter1.md")));
+    }
+
+    #[test]
+    fn test_should_exclude_wildcard() {
+        let config = Config {
+            exclude_pages: vec![Pattern::new("appendix/*").unwrap()],
+            ..Default::default()
+        };
+        assert!(config.should_exclude(Path::new("appendix/a.md")));
+        assert!(config.should_exclude(Path::new("appendix/b.md")));
+        assert!(!config.should_exclude(Path::new("chapter1.md")));
+    }
+
+    #[test]
+    fn test_should_exclude_recursive_glob() {
+        let config = Config {
+            exclude_pages: vec![Pattern::new("**/draft-*.md").unwrap()],
+            ..Default::default()
+        };
+        assert!(config.should_exclude(Path::new("draft-intro.md")));
+        assert!(config.should_exclude(Path::new("chapters/draft-chapter1.md")));
+        assert!(!config.should_exclude(Path::new("chapter1.md")));
+    }
+
+    #[test]
+    fn test_aliases_getter() {
+        let mut aliases = HashMap::new();
+        aliases.insert("API".to_string(), vec!["apis".to_string(), "api endpoint".to_string()]);
+        let config = Config {
+            aliases,
+            ..Default::default()
+        };
+
+        assert_eq!(config.aliases("API"), Some(&vec!["apis".to_string(), "api endpoint".to_string()]));
+        assert_eq!(config.aliases("REST"), None);
+    }
+
+    #[test]
+    fn test_all_aliases_iterator() {
+        let mut aliases = HashMap::new();
+        aliases.insert("API".to_string(), vec!["apis".to_string()]);
+        aliases.insert("REST".to_string(), vec!["RESTful".to_string()]);
+        let config = Config {
+            aliases,
+            ..Default::default()
+        };
+
+        assert_eq!(config.all_aliases().count(), 2);
     }
 }

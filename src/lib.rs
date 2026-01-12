@@ -42,7 +42,9 @@ mod linker;
 pub use config::Config;
 pub use glossary::Term;
 
-use anyhow::{Context, Result};
+use std::collections::HashSet;
+
+use anyhow::{bail, Context, Result};
 use mdbook_preprocessor::book::{Book, BookItem};
 use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 
@@ -84,10 +86,37 @@ impl Preprocessor for TermlinkPreprocessor {
 
         log::info!("Found {} glossary terms", terms.len());
 
-        // 2. Calculate glossary HTML path for linking
+        // 2. Validate alias conflicts (before applying aliases)
+        let term_names: HashSet<String> = terms.iter().map(|t| t.name().to_lowercase()).collect();
+
+        for (term_name, aliases) in self.config.all_aliases() {
+            for alias in aliases {
+                let alias_lower = alias.to_lowercase();
+                // Check if alias conflicts with a different term's name
+                if term_names.contains(&alias_lower) && alias_lower != term_name.to_lowercase() {
+                    bail!(
+                        "Alias '{alias}' for term '{term_name}' conflicts with existing term"
+                    );
+                }
+            }
+        }
+
+        // 3. Apply aliases from config to terms
+        let terms: Vec<Term> = terms
+            .into_iter()
+            .map(|term| {
+                if let Some(aliases) = self.config.aliases(term.name()) {
+                    term.with_aliases(aliases.clone())
+                } else {
+                    term
+                }
+            })
+            .collect();
+
+        // 4. Calculate glossary HTML path for linking
         let glossary_html_path = glossary::get_glossary_html_path(self.config.glossary_path());
 
-        // 3. Process each chapter
+        // 5. Process each chapter
         book.for_each_mut(|item| {
             if let BookItem::Chapter(chapter) = item {
                 // Skip draft chapters and the glossary itself
@@ -97,6 +126,12 @@ impl Preprocessor for TermlinkPreprocessor {
 
                 if self.config.is_glossary_path(chapter_path) {
                     log::debug!("Skipping glossary file: {}", chapter_path.display());
+                    return;
+                }
+
+                // Check exclude-pages
+                if self.config.should_exclude(chapter_path) {
+                    log::debug!("Skipping excluded page: {}", chapter_path.display());
                     return;
                 }
 

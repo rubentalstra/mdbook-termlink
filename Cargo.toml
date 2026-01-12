@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-termlink"
-version = "0.0.2"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Ruben Talstra"]
@@ -21,6 +21,7 @@ regex = "1.10"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"
+glob = "0.3"
 
 [dev-dependencies]
 tempfile = "3.0"

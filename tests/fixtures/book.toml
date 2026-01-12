@@ -1,0 +1,9 @@
+[book]
+title = "Test Book"
+authors = ["Test Author"]
+
+[preprocessor.termlink]
+glossary-path = "reference/glossary.md"
+link-first-only = true
+css-class = "glossary-term"
+case-sensitive = false

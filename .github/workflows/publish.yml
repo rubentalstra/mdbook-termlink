@@ -1,0 +1,218 @@
+# Publish to crates.io
+#
+# FIRST-TIME SETUP:
+# 1. Generate an API token at https://crates.io/settings/tokens
+# 2. Add it as a repository secret named CARGO_REGISTRY_TOKEN
+# 3. Create a GitHub environment named "crates-io" with protection rules
+#
+# AFTER FIRST PUBLISH (optional - switch to OIDC):
+# 1. Go to https://crates.io/crates/mdbook-termlink/settings
+# 2. Add a "Trusted Publisher" for this GitHub repository
+# 3. Remove CARGO_REGISTRY_TOKEN secret
+# 4. Uncomment the OIDC section below and remove the API token section
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"      # v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+-*"    # v1.2.3-beta.1
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate without publishing)"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ===========================================
+  # Validate the package before publishing
+  # ===========================================
+  validate:
+    name: Validate Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_version: ${{ steps.version.outputs.tag_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Extract versions
+        id: version
+        run: |
+          # Get version from Cargo.toml
+          CARGO_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].version')
+          echo "version=$CARGO_VERSION" >> $GITHUB_OUTPUT
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          # Get version from git tag (if triggered by tag)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
+            echo "Git tag version: $TAG_VERSION"
+          fi
+
+      - name: Verify tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          CARGO_VERSION: ${{ steps.version.outputs.version }}
+          TAG_VERSION: ${{ steps.version.outputs.tag_version }}
+        run: |
+          if [[ "$CARGO_VERSION" != "$TAG_VERSION" ]]; then
+            echo "::error::Version mismatch! Cargo.toml has $CARGO_VERSION but tag is v$TAG_VERSION"
+            exit 1
+          fi
+          echo "Version match confirmed: $CARGO_VERSION"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features --verbose
+
+      - name: Check documentation
+        run: cargo doc --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Verify package contents
+        run: |
+          echo "=== Package contents ==="
+          cargo package --list --allow-dirty
+          echo ""
+          echo "=== Package size ==="
+          cargo package --allow-dirty 2>&1 | grep -E "Packaged|Compiling" || true
+
+      - name: Dry run publish
+        run: cargo publish --dry-run --allow-dirty
+
+  # ===========================================
+  # Publish to crates.io
+  # ===========================================
+  publish:
+    name: Publish to crates.io
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      # Uncomment for OIDC authentication (after first publish):
+      # id-token: write
+    # Skip publish on dry run
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # ─────────────────────────────────────────
+      # API Token Authentication (for first publish)
+      # ─────────────────────────────────────────
+      - name: Publish to crates.io
+        run: cargo publish --verbose
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # ─────────────────────────────────────────
+      # OIDC Authentication (after first publish)
+      # Uncomment this section and remove the API token section above
+      # ─────────────────────────────────────────
+      # - name: Authenticate with crates.io (OIDC)
+      #   uses: rust-lang/crates-io-auth-action@v1
+      #   id: auth
+      #
+      # - name: Publish to crates.io
+      #   run: cargo publish --verbose
+      #   env:
+      #     CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Verify publication
+        env:
+          CRATE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          echo "Waiting for crates.io to index (60s)..."
+          sleep 60
+
+          echo "Checking crates.io API..."
+          if curl -sf "https://crates.io/api/v1/crates/mdbook-termlink/$CRATE_VERSION" > /dev/null 2>&1; then
+            echo "mdbook-termlink v$CRATE_VERSION is now available on crates.io!"
+            echo ""
+            echo "Install with: cargo install mdbook-termlink"
+            echo "View at: https://crates.io/crates/mdbook-termlink/$CRATE_VERSION"
+          else
+            echo "Package may still be indexing. Check manually:"
+            echo "   https://crates.io/crates/mdbook-termlink"
+          fi
+
+  # ===========================================
+  # Create GitHub Release (using GitHub CLI)
+  # ===========================================
+  release:
+    name: Create GitHub Release
+    needs: [ validate, publish ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for release notes generation
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          # Determine if this is a prerelease (e.g., v1.0.0-beta.1)
+          PRERELEASE_FLAG=""
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          # Create release with auto-generated notes + custom header
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            $PRERELEASE_FLAG \
+            --notes "## Installation
+
+          \`\`\`bash
+          cargo install mdbook-termlink
+          \`\`\`
+
+          ## Links
+
+          - [crates.io](https://crates.io/crates/mdbook-termlink/${VERSION})
+          - [Documentation](https://docs.rs/mdbook-termlink/${VERSION})
+          "

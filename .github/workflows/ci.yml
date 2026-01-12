@@ -9,10 +9,11 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  MDBOOK_VERSION: "0.5.2"
 
 jobs:
   test:
-    name: Test (${{ matrix.rust }} on ${{ matrix.os }})
+    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,128 +21,59 @@ jobs:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
         rust: [ stable, beta ]
         include:
-          # Only test MSRV on Linux to save CI time
           - os: ubuntu-latest
             rust: "1.88.0"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain (${{ matrix.rust }})
-        uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          # Include rust version in cache key for MSRV testing
-          prefix-key: "v0-rust-${{ matrix.rust }}"
+          prefix-key: v0-rust-${{ matrix.rust }}
 
-      - name: Build
-        run: cargo build --verbose
+      - name: Install mdbook
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook@${{ env.MDBOOK_VERSION }}
 
-      - name: Run tests
-        run: cargo test --verbose
+      - run: cargo build --verbose
+      - run: cargo test --verbose
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
 
   docs:
-    name: Documentation
+    name: Docs
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build documentation
-        run: cargo doc --no-deps --document-private-items
+      - run: cargo doc --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: -D warnings
 
-  # Ensure Cargo.lock is up to date
   lockfile:
     name: Lockfile
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Check Cargo.lock is up to date
-        run: cargo update --locked
-
-  # End-to-end tests with real mdBook
-  e2e:
-    name: E2E Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
-        include:
-          - os: ubuntu-latest
-            mdbook_url: https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-unknown-linux-gnu.tar.gz
-            mdbook_extract: tar -xz -C ~/.cargo/bin
-          - os: macos-latest
-            mdbook_url: https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-aarch64-apple-darwin.tar.gz
-            mdbook_extract: tar -xz -C ~/.cargo/bin
-          - os: windows-latest
-            mdbook_url: https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-pc-windows-msvc.zip
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install mdBook (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p ~/.cargo/bin
-          curl -sSL ${{ matrix.mdbook_url }} | ${{ matrix.mdbook_extract }}
-        shell: bash
-
-      - name: Install mdBook (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          Invoke-WebRequest -Uri "${{ matrix.mdbook_url }}" -OutFile mdbook.zip
-          Expand-Archive mdbook.zip -DestinationPath $env:USERPROFILE\.cargo\bin
-        shell: pwsh
-
-      - name: Build preprocessor
-        run: cargo build
-
-      - name: Run E2E tests
-        run: cargo test --test e2e --no-fail-fast
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo update --locked

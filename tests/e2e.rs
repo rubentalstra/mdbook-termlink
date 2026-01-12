@@ -26,7 +26,7 @@ fn preprocessor_binary() -> PathBuf {
     path.join("release").join(binary_name())
 }
 
-fn binary_name() -> &'static str {
+const fn binary_name() -> &'static str {
     if cfg!(windows) {
         "mdbook-termlink.exe"
     } else {
@@ -56,8 +56,8 @@ fn get_book_dir() -> &'static PathBuf {
         let binary = preprocessor_binary();
         assert!(
             binary.exists(),
-            "Preprocessor binary not found at {:?}. Run `cargo build` first.",
-            binary
+            "Preprocessor binary not found at {}. Run `cargo build` first.",
+            binary.display()
         );
 
         let bin_dir = binary.parent().unwrap();
@@ -92,7 +92,8 @@ fn get_book_dir() -> &'static PathBuf {
 fn read_html(relative_path: &str) -> String {
     let book_dir = get_book_dir();
     let path = book_dir.join(relative_path);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e))
+    fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()))
 }
 
 // =============================================================================
@@ -126,7 +127,7 @@ fn test_e2e_tooltip_preview() {
 
     // Verify title attribute exists (for tooltip)
     assert!(
-        html.contains(r#"title="#),
+        html.contains(r"title="),
         "Expected title attribute for tooltip preview"
     );
 
@@ -153,8 +154,7 @@ fn test_e2e_code_block_exclusion() {
             let code_block = &html[start..start + end];
             assert!(
                 !code_block.contains("glossary-term"),
-                "Terms inside code blocks should NOT be linked:\n{}",
-                code_block
+                "Terms inside code blocks should NOT be linked:\n{code_block}"
             );
         }
     }
@@ -171,7 +171,7 @@ fn test_e2e_inline_code_exclusion() {
     // Inline code like `REST` should not be linked
     // The pattern <code>REST</code> should NOT have glossary-term
     assert!(
-        !html.contains(r#"<code><a"#),
+        !html.contains(r"<code><a"),
         "Inline code should not contain glossary links"
     );
 }
@@ -190,8 +190,7 @@ fn test_e2e_link_first_only() {
 
     assert_eq!(
         api_link_count, 1,
-        "Expected exactly 1 API link (link-first-only=true), found {}",
-        api_link_count
+        "Expected exactly 1 API link (link-first-only=true), found {api_link_count}"
     );
 }
 
@@ -226,8 +225,7 @@ fn test_e2e_heading_exclusion() {
             let heading = &html[start..start + end + 5];
             assert!(
                 !heading.contains("glossary-term"),
-                "Terms in headings should NOT be linked: {}",
-                heading
+                "Terms in headings should NOT be linked: {heading}"
             );
         }
     }

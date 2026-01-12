@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Result;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use regex::{Regex, RegexBuilder};
 
@@ -110,10 +110,10 @@ fn process_events<'a>(
                 let current_context = context_stack.last().copied().unwrap_or(Context::Normal);
 
                 if current_context == Context::Normal {
-                    // Safe to process - replace terms with links
-                    let processed =
-                        replace_terms_in_text(text, terms, glossary_path, config, linked_terms);
-                    result.push(Event::Html(processed.into()));
+                    // Safe to process - replace terms with links, emitting split events
+                    let events =
+                        replace_terms_to_events(text, terms, glossary_path, config, linked_terms);
+                    result.extend(events);
                 } else {
                     // Inside code/link/heading - pass through unchanged
                     result.push(event);
@@ -130,30 +130,29 @@ fn process_events<'a>(
     result
 }
 
-/// Replaces term occurrences in a text string with HTML links.
-fn replace_terms_in_text(
+/// Replaces term occurrences, returning a sequence of separate Text and Html events.
+/// This avoids the issue of wrapping mixed content in a single Html event.
+fn replace_terms_to_events(
     text: &str,
     terms: &[&Term],
     glossary_path: &str,
     config: &Config,
     linked_terms: &mut HashSet<String>,
-) -> String {
-    let mut result = text.to_string();
+) -> Vec<Event<'static>> {
+    // 1. Find all matches with positions
+    let mut matches: Vec<(usize, usize, String)> = Vec::new(); // (start, end, html_link)
 
     for term in terms {
-        // Skip if already linked and link-first-only is enabled
         if config.link_first_only() && linked_terms.contains(term.anchor()) {
             continue;
         }
 
-        // Build regex for this term
         let Some(regex) = build_term_regex(term, config.case_sensitive()) else {
             continue;
         };
 
-        if let Some(mat) = regex.find(&result) {
-            // Build replacement link with optional title attribute for tooltip
-            let matched_text = &result[mat.start()..mat.end()];
+        if let Some(mat) = regex.find(text) {
+            let matched_text = &text[mat.start()..mat.end()];
             let title_attr = term
                 .definition()
                 .map(|d| format!(r#" title="{}""#, html_escape(d)))
@@ -167,30 +166,46 @@ fn replace_terms_in_text(
                 html_escape(matched_text),
             );
 
-            // Replace (first occurrence only if link-first-only)
-            if config.link_first_only() {
-                result = format!("{}{}{}", &result[..mat.start()], link, &result[mat.end()..]);
-            } else {
-                // Replace all occurrences - need to capture title_attr for closure
-                let title_attr_clone = title_attr.clone();
-                result = regex
-                    .replace_all(&result, |caps: &regex::Captures| {
-                        format!(
-                            r#"<a href="{}#{}"{} class="{}">{}</a>"#,
-                            glossary_path,
-                            term.anchor(),
-                            title_attr_clone,
-                            config.css_class(),
-                            html_escape(&caps[0]),
-                        )
-                    })
-                    .to_string();
-            }
+            matches.push((mat.start(), mat.end(), link));
             linked_terms.insert(term.anchor().to_string());
         }
     }
 
-    result
+    // 2. Sort by position
+    matches.sort_by_key(|(start, _, _)| *start);
+
+    // 3. Build events (using owned strings to avoid lifetime issues)
+    let mut events = Vec::new();
+    let mut last_end = 0;
+
+    for (start, end, link) in matches {
+        // Skip overlapping matches
+        if start < last_end {
+            continue;
+        }
+
+        // Emit text before this match (owned)
+        if start > last_end {
+            events.push(Event::Text(CowStr::from(text[last_end..start].to_string())));
+        }
+
+        // Emit the link as HTML (owned)
+        events.push(Event::Html(CowStr::from(link)));
+
+        last_end = end;
+    }
+
+    // Emit remaining text (owned)
+    if last_end < text.len() {
+        events.push(Event::Text(CowStr::from(text[last_end..].to_string())));
+    }
+
+    // If no matches, return original text as single event (owned)
+    if events.is_empty() {
+        events.push(Event::Text(CowStr::from(text.to_string())));
+    }
+
+    events
 }
 
 /// Builds a regex pattern for matching a term.
@@ -309,6 +324,17 @@ mod tests {
         assert_eq!(html_escape(r#"say "hello""#), "say &quot;hello&quot;");
     }
 
+    /// Helper to convert events to a concatenated string for test assertions
+    fn events_to_string(events: &[Event]) -> String {
+        events
+            .iter()
+            .map(|e| match e {
+                Event::Text(s) | Event::Html(s) => s.to_string(),
+                _ => String::new(),
+            })
+            .collect()
+    }
+
     #[test]
     fn test_replace_terms_link_first_only() {
         let term = Term::new("XPT");
@@ -316,13 +342,14 @@ mod tests {
         let config = default_config();
         let mut linked = HashSet::new();
 
-        let result = replace_terms_in_text(
+        let events = replace_terms_to_events(
             "XPT is great. XPT is used.",
             &terms,
             "g.html",
             &config,
             &mut linked,
         );
+        let result = events_to_string(&events);
 
         // Should only link first occurrence
         assert!(result.contains(r#"<a href="g.html#xpt""#));
@@ -337,13 +364,14 @@ mod tests {
         let config = default_config();
         let mut linked = HashSet::new();
 
-        let result = replace_terms_in_text(
+        let events = replace_terms_to_events(
             "Use the API for data access.",
             &terms,
             "glossary.html",
             &config,
             &mut linked,
         );
+        let result = events_to_string(&events);
 
         // Should include title attribute with definition
         assert!(result.contains(r#"title="Application Programming Interface""#));
@@ -358,13 +386,14 @@ mod tests {
         let config = default_config();
         let mut linked = HashSet::new();
 
-        let result = replace_terms_in_text(
+        let events = replace_terms_to_events(
             "Use the API for data access.",
             &terms,
             "glossary.html",
             &config,
             &mut linked,
         );
+        let result = events_to_string(&events);
 
         // Should NOT include title attribute
         assert!(!result.contains("title="));
@@ -378,13 +407,14 @@ mod tests {
         let config = default_config();
         let mut linked = HashSet::new();
 
-        let result = replace_terms_in_text(
+        let events = replace_terms_to_events(
             "This is a RESTful service.",
             &terms,
             "glossary.html",
             &config,
             &mut linked,
         );
+        let result = events_to_string(&events);
 
         // Should link the alias
         assert!(result.contains(r#"<a href="glossary.html#rest""#));

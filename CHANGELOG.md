@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-01-12
+
+### Fixed
+
+- **HTML Tag Parsing**: Fixed broken HTML output where `</a>` closing tags were being lost
+  - Previously, the entire processed text was wrapped in a single `Event::Html`, causing mdBook's parser to mishandle mixed HTML/text content
+  - Now emits separate `Event::Text` and `Event::Html` events for proper HTML structure
+  - Eliminates "unexpected HTML end tag `</a>`" warnings during `mdbook build`
+  - Glossary term links now render correctly without nested unclosed anchor tags
+
+### Changed
+
+- Replaced `replace_terms_in_text()` with `replace_terms_to_events()` for cleaner event-based output
+- Internal refactoring of term replacement logic to emit split events
+
 ## [0.0.4] - 2026-01-12
 
 ### Added
@@ -66,7 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `css-class`: CSS class for term links (default: `glossary-term`)
 - `case-sensitive`: Case-sensitive matching (default: `false`)
 
-[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.5...HEAD
+
+[0.0.5]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.4...v0.0.5
 
 [0.0.4]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.3...v0.0.4
 

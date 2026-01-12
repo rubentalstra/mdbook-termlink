@@ -3,6 +3,7 @@
 [![CI](https://github.com/rubentalstra/mdbook-termlink/actions/workflows/ci.yml/badge.svg)](https://github.com/rubentalstra/mdbook-termlink/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/mdbook-termlink.svg)](https://crates.io/crates/mdbook-termlink)
 [![Documentation](https://docs.rs/mdbook-termlink/badge.svg)](https://docs.rs/mdbook-termlink)
+[![dependency status](https://deps.rs/repo/github/rubentalstra/mdbook-termlink/status.svg)](https://deps.rs/repo/github/rubentalstra/mdbook-termlink)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 An [mdBook](https://github.com/rust-lang/mdBook) preprocessor that automatically links glossary terms throughout your
@@ -10,15 +11,13 @@ documentation.
 
 ## Features
 
-- Parses glossary terms from definition list markdown format
-- Auto-links first occurrence of each term per page (configurable)
-- Skips code blocks, inline code, existing links, and headings
-- Supports case-insensitive matching (configurable)
-- Custom CSS class for styled glossary links
-- Supports terms with short forms like "API (Application Programming Interface)"
-- **Tooltip Preview**: Shows definition text on hover
-- **Exclude Pages**: Skip specific pages using glob patterns
-- **Term Aliases**: Define alternative names for terms
+- **Automatic Term Linking**: Parses glossary terms from Markdown definition lists and links them throughout your book
+- **Smart Context Detection**: Skips code blocks, inline code, existing links, headings, and images
+- **Tooltip Preview**: Displays term definitions on hover via HTML `title` attribute
+- **Configurable Matching**: Case-insensitive matching with link-first-only option per page
+- **Exclude Pages**: Skip specific pages from processing using glob patterns
+- **Term Aliases**: Define alternative names that link to the same glossary entry
+- **Short Form Support**: Automatically handles terms like "API (Application Programming Interface)"
 
 ## Installation
 
@@ -36,9 +35,9 @@ cd mdbook-termlink
 cargo install --path .
 ```
 
-## Usage
+## Quick Start
 
-### 1. Add to your `book.toml`
+### 1. Configure your `book.toml`
 
 ```toml
 [preprocessor.termlink]
@@ -47,7 +46,7 @@ glossary-path = "reference/glossary.md"
 
 ### 2. Create a glossary file
 
-Create your glossary using markdown definition lists:
+Use Markdown definition lists in your glossary:
 
 ```markdown
 # Glossary
@@ -68,7 +67,7 @@ JSON
 mdbook build
 ```
 
-Terms in your chapters will automatically link to their glossary definitions!
+Terms in your chapters will automatically link to their glossary definitions with tooltip previews on hover.
 
 ## Configuration
 
@@ -97,16 +96,16 @@ API = ["apis", "api endpoints"]
 REST = ["RESTful"]
 ```
 
-### Configuration Options
+### Options Reference
 
-| Option            | Type         | Default                   | Description                              |
-|-------------------|--------------|---------------------------|------------------------------------------|
-| `glossary-path`   | String       | `"reference/glossary.md"` | Path to glossary file relative to `src/` |
-| `link-first-only` | Boolean      | `true`                    | Only link first occurrence per page      |
-| `css-class`       | String       | `"glossary-term"`         | CSS class for term links                 |
-| `case-sensitive`  | Boolean      | `false`                   | Case-sensitive term matching             |
-| `exclude-pages`   | String Array | `[]`                      | Glob patterns for pages to skip          |
-| `aliases`         | Map          | `{}`                      | Alternative names for terms              |
+| Option            | Type    | Default                   | Description                              |
+|-------------------|---------|---------------------------|------------------------------------------|
+| `glossary-path`   | String  | `"reference/glossary.md"` | Path to glossary file relative to `src/` |
+| `link-first-only` | Boolean | `true`                    | Only link first occurrence per page      |
+| `css-class`       | String  | `"glossary-term"`         | CSS class for term links                 |
+| `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching             |
+| `exclude-pages`   | Array   | `[]`                      | Glob patterns for pages to skip          |
+| `aliases`         | Map     | `{}`                      | Alternative names for terms              |
 
 ## Styling
 
@@ -132,33 +131,19 @@ Example `custom.css`:
 
 ## How It Works
 
-1. **Glossary Parsing**: The preprocessor parses your glossary file looking for definition lists (term followed by
-   `: definition`)
+1. **Glossary Parsing**: Parses your glossary file for definition lists (term followed by `: definition`)
 
-2. **Term Extraction**: Each term is extracted with:
-    - Full name (e.g., "API (Application Programming Interface)")
-    - Anchor (e.g., "api-application-programming-interface")
-    - Short form if present (e.g., "API")
+2. **Term Extraction**: Extracts each term with its anchor, short form (if present), and definition
 
-3. **Content Processing**: For each chapter (except the glossary):
-    - Skips code blocks, inline code, existing links, headings, and images
-    - Matches terms using word boundaries to avoid partial matches
-    - Creates links to the glossary with the configured CSS class
+3. **Content Processing**: Processes each chapter, matching terms using word boundaries while skipping protected
+   contexts
 
-4. **Link Generation**: Terms are replaced with HTML links (with tooltip if definition exists):
+4. **Link Generation**: Replaces terms with HTML links including tooltip definitions:
    ```html
-   <a href="../reference/glossary.html#api-application-programming-interface" title="A set of protocols and tools for building software applications." class="glossary-term">API</a>
+   <a href="../reference/glossary.html#api"
+      title="A set of protocols and tools for building software applications."
+      class="glossary-term">API</a>
    ```
-
-## Context Awareness
-
-The preprocessor is smart about where it adds links. It will **not** link terms inside:
-
-- Code blocks (fenced or indented)
-- Inline code (backticks)
-- Existing links
-- Headings (to preserve table of contents)
-- Image alt text
 
 ## Requirements
 
@@ -168,8 +153,11 @@ The preprocessor is smart about where it adds links. It will **not** link terms 
 ## Development
 
 ```bash
-# Run tests
+# Run all tests (unit, integration, and e2e)
 cargo test
+
+# Run only e2e tests (requires mdBook installed)
+cargo test --test e2e
 
 # Run clippy
 cargo clippy --all-targets --all-features -- -D warnings
@@ -180,12 +168,6 @@ cargo fmt --all -- --check
 # Build release
 cargo build --release
 ```
-
-## Resources
-
-- [mdBook Documentation](https://rust-lang.github.io/mdBook/)
-- [mdBook Preprocessor Guide](https://rust-lang.github.io/mdBook/for_developers/preprocessors.html)
-- [pulldown-cmark Definition Lists Spec](https://github.com/pulldown-cmark/pulldown-cmark/blob/main/pulldown-cmark/specs/definition_lists.txt)
 
 ## License
 

@@ -120,8 +120,7 @@ jobs:
     environment: crates-io
     permissions:
       contents: read
-      # Uncomment for OIDC authentication (after first publish):
-      # id-token: write
+      id-token: write
     # Skip publish on dry run
     if: ${{ !inputs.dry_run }}
     steps:
@@ -134,26 +133,14 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
-      # ─────────────────────────────────────────
-      # API Token Authentication (for first publish)
-      # ─────────────────────────────────────────
+      - name: Authenticate with crates.io (OIDC)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
       - name: Publish to crates.io
         run: cargo publish --verbose
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      # ─────────────────────────────────────────
-      # OIDC Authentication (after first publish)
-      # Uncomment this section and remove the API token section above
-      # ─────────────────────────────────────────
-      # - name: Authenticate with crates.io (OIDC)
-      #   uses: rust-lang/crates-io-auth-action@v1
-      #   id: auth
-      #
-      # - name: Publish to crates.io
-      #   run: cargo publish --verbose
-      #   env:
-      #     CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Verify publication
         env:
@@ -189,7 +176,7 @@ jobs:
         with:
           fetch-depth: 0  # Needed for release notes generation
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.validate.outputs.version }}
@@ -200,19 +187,32 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
 
-          # Create release with auto-generated notes + custom header
-          gh release create "$GITHUB_REF_NAME" \
-            --title "v${VERSION}" \
-            --generate-notes \
-            $PRERELEASE_FLAG \
-            --notes "## Installation
+          # Generate release notes content
+          cat << 'EOF' > release_notes.md
+          ## Installation
 
-          \`\`\`bash
+          ```bash
           cargo install mdbook-termlink
-          \`\`\`
+          ```
 
           ## Links
 
-          - [crates.io](https://crates.io/crates/mdbook-termlink/${VERSION})
-          - [Documentation](https://docs.rs/mdbook-termlink/${VERSION})
-          "
+          - [crates.io](https://crates.io/crates/mdbook-termlink/${{ needs.validate.outputs.version }})
+          - [Documentation](https://docs.rs/mdbook-termlink/${{ needs.validate.outputs.version }})
+          EOF
+
+          # Check if release already exists
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, updating..."
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "v${VERSION}" \
+              --notes-file release_notes.md \
+              $PRERELEASE_FLAG
+          else
+            echo "Creating new release $GITHUB_REF_NAME..."
+            gh release create "$GITHUB_REF_NAME" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --notes-file release_notes.md \
+              $PRERELEASE_FLAG
+          fi

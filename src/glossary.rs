@@ -91,12 +91,11 @@ pub fn extract_terms(book: &Book, config: &Config) -> Result<Vec<Term>> {
 /// Finds and returns the content of the glossary chapter.
 fn find_glossary_content(book: &Book, glossary_path: &Path) -> Result<String> {
     for item in book.iter() {
-        if let BookItem::Chapter(chapter) = item {
-            if let Some(ref path) = chapter.path {
-                if path == glossary_path || path.ends_with(glossary_path) {
-                    return Ok(chapter.content.clone());
-                }
-            }
+        if let BookItem::Chapter(chapter) = item
+            && let Some(ref path) = chapter.path
+            && (path == glossary_path || path.ends_with(glossary_path))
+        {
+            return Ok(chapter.content.clone());
         }
     }
     bail!("Glossary file not found: {}", glossary_path.display())

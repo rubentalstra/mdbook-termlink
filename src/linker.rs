@@ -331,7 +331,8 @@ mod tests {
 
     #[test]
     fn test_replace_terms_with_tooltip() {
-        let term = Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let term =
+            Term::with_definition("API", Some("Application Programming Interface".to_string()));
         let terms: Vec<&Term> = vec![&term];
         let config = default_config();
         let mut linked = HashSet::new();

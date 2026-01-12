@@ -44,7 +44,7 @@ pub use glossary::Term;
 
 use std::collections::HashSet;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use mdbook_preprocessor::book::{Book, BookItem};
 use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 
@@ -94,9 +94,7 @@ impl Preprocessor for TermlinkPreprocessor {
                 let alias_lower = alias.to_lowercase();
                 // Check if alias conflicts with a different term's name
                 if term_names.contains(&alias_lower) && alias_lower != term_name.to_lowercase() {
-                    bail!(
-                        "Alias '{alias}' for term '{term_name}' conflicts with existing term"
-                    );
+                    bail!("Alias '{alias}' for term '{term_name}' conflicts with existing term");
                 }
             }
         }

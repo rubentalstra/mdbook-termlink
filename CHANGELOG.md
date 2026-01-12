@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-01-12
+
+### Added
+
+- **Tooltip Preview**: Glossary definitions now appear as tooltips on hover via HTML `title` attribute
+- **Exclude Pages**: Skip term linking for specified pages using glob patterns (`exclude-pages` config option)
+- **Term Aliases**: Define alternative names for terms in `book.toml` (`aliases` config option)
+- Alias conflict detection with clear error messages
+
+### Configuration Options
+
+- `exclude-pages`: List of glob patterns for pages to skip (default: `[]`)
+- `aliases`: Map of term names to alternative names (default: `{}`)
+
 ## [0.0.1] - 2026-01-12
 
 ### Added
@@ -29,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `css-class`: CSS class for term links (default: `glossary-term`)
 - `case-sensitive`: Case-sensitive matching (default: `false`)
 
-[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.3...HEAD
+
+[0.0.3]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.1...v0.0.3
 
 [0.0.1]: https://github.com/rubentalstra/mdbook-termlink/releases/tag/v0.0.1

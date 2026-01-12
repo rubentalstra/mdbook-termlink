@@ -213,13 +213,19 @@ mod tests {
     #[test]
     fn test_aliases_getter() {
         let mut aliases = HashMap::new();
-        aliases.insert("API".to_string(), vec!["apis".to_string(), "api endpoint".to_string()]);
+        aliases.insert(
+            "API".to_string(),
+            vec!["apis".to_string(), "api endpoint".to_string()],
+        );
         let config = Config {
             aliases,
             ..Default::default()
         };
 
-        assert_eq!(config.aliases("API"), Some(&vec!["apis".to_string(), "api endpoint".to_string()]));
+        assert_eq!(
+            config.aliases("API"),
+            Some(&vec!["apis".to_string(), "api endpoint".to_string()])
+        );
         assert_eq!(config.aliases("REST"), None);
     }
 

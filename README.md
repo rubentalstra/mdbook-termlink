@@ -16,6 +16,9 @@ documentation.
 - Supports case-insensitive matching (configurable)
 - Custom CSS class for styled glossary links
 - Supports terms with short forms like "API (Application Programming Interface)"
+- **Tooltip Preview**: Shows definition text on hover
+- **Exclude Pages**: Skip specific pages using glob patterns
+- **Term Aliases**: Define alternative names for terms
 
 ## Installation
 
@@ -84,16 +87,26 @@ css-class = "glossary-term"
 
 # Whether term matching should be case-sensitive
 case-sensitive = false
+
+# Pages to exclude from term linking (glob patterns)
+exclude-pages = ["changelog.md", "appendix/*"]
+
+# Alternative names for terms
+[preprocessor.termlink.aliases]
+API = ["apis", "api endpoints"]
+REST = ["RESTful"]
 ```
 
 ### Configuration Options
 
-| Option            | Type    | Default                   | Description                              |
-|-------------------|---------|---------------------------|------------------------------------------|
-| `glossary-path`   | String  | `"reference/glossary.md"` | Path to glossary file relative to `src/` |
-| `link-first-only` | Boolean | `true`                    | Only link first occurrence per page      |
-| `css-class`       | String  | `"glossary-term"`         | CSS class for term links                 |
-| `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching             |
+| Option            | Type         | Default                   | Description                              |
+|-------------------|--------------|---------------------------|------------------------------------------|
+| `glossary-path`   | String       | `"reference/glossary.md"` | Path to glossary file relative to `src/` |
+| `link-first-only` | Boolean      | `true`                    | Only link first occurrence per page      |
+| `css-class`       | String       | `"glossary-term"`         | CSS class for term links                 |
+| `case-sensitive`  | Boolean      | `false`                   | Case-sensitive term matching             |
+| `exclude-pages`   | String Array | `[]`                      | Glob patterns for pages to skip          |
+| `aliases`         | Map          | `{}`                      | Alternative names for terms              |
 
 ## Styling
 
@@ -132,9 +145,9 @@ Example `custom.css`:
     - Matches terms using word boundaries to avoid partial matches
     - Creates links to the glossary with the configured CSS class
 
-4. **Link Generation**: Terms are replaced with HTML links:
+4. **Link Generation**: Terms are replaced with HTML links (with tooltip if definition exists):
    ```html
-   <a href="../reference/glossary.html#api-application-programming-interface" class="glossary-term">API</a>
+   <a href="../reference/glossary.html#api-application-programming-interface" title="A set of protocols and tools for building software applications." class="glossary-term">API</a>
    ```
 
 ## Context Awareness

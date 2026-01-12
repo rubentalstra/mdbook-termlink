@@ -336,14 +336,16 @@ mod tests {
 
     #[test]
     fn test_term_with_definition() {
-        let term = Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let term =
+            Term::with_definition("API", Some("Application Programming Interface".to_string()));
         assert_eq!(term.name(), "API");
         assert_eq!(term.definition(), Some("Application Programming Interface"));
     }
 
     #[test]
     fn test_term_with_aliases() {
-        let term = Term::new("API").with_aliases(vec!["apis".to_string(), "api endpoint".to_string()]);
+        let term =
+            Term::new("API").with_aliases(vec!["apis".to_string(), "api endpoint".to_string()]);
         let forms = term.searchable_forms();
         assert_eq!(forms.len(), 3);
         assert!(forms.contains(&"API"));
@@ -398,11 +400,17 @@ XPT
         assert_eq!(terms[0].name(), "API (Application Programming Interface)");
         assert_eq!(terms[0].short_name(), Some("API"));
         assert_eq!(terms[0].anchor(), "api-application-programming-interface");
-        assert_eq!(terms[0].definition(), Some("A set of protocols for building software."));
+        assert_eq!(
+            terms[0].definition(),
+            Some("A set of protocols for building software.")
+        );
 
         assert_eq!(terms[1].name(), "REST");
         assert_eq!(terms[1].anchor(), "rest");
-        assert_eq!(terms[1].definition(), Some("Representational State Transfer."));
+        assert_eq!(
+            terms[1].definition(),
+            Some("Representational State Transfer.")
+        );
 
         assert_eq!(terms[2].name(), "XPT");
         assert_eq!(terms[2].anchor(), "xpt");

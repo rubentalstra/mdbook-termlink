@@ -449,4 +449,18 @@ XPT
             PathBuf::from("reference/glossary.html")
         );
     }
+
+    #[test]
+    fn test_parse_definition_split() {
+        let splitted = split_definition(
+            "Extensible Messaging and Presence Protocol ;;; An open-standard, XML-based technology for real-time, decentralized communication",
+            Some(";;;"),
+        );
+
+        assert_eq!(splitted.is_some(), true);
+        assert_eq!(
+            splitted.unwrap(),
+            "Extensible Messaging and Presence Protocol".to_string()
+        );
+    }
 }

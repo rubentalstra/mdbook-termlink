@@ -174,7 +174,7 @@ fn parse_definition_lists(content: &str, split_pattern: Option<&str>) -> Vec<Ter
                         let definition = if current_definition_text.trim().is_empty() {
                             None
                         } else {
-                            Some(current_definition_text.trim().to_string())
+                            split_definition(current_definition_text.trim(), split_pattern)
                         };
                         terms.push(Term::with_definition(title, definition));
                     }

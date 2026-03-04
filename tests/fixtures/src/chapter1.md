@@ -13,3 +13,7 @@ The API can return data in JSON format. JSON is widely supported across platform
 The XPT format is commonly used in regulatory contexts. XPT files contain tabular data.
 
 Use the CLI to interact with the system. The CLI supports multiple commands.
+
+## Messaging Protocols
+
+XMPP is used for real-time communication between systems.

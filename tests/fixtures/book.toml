@@ -8,6 +8,7 @@ link-first-only = true
 css-class = "glossary-term"
 case-sensitive = false
 exclude-pages = ["excluded.md"]
+split-pattern = " -- "
 
 [preprocessor.termlink.aliases]
 API = ["apis", "api endpoints"]

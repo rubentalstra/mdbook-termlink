@@ -305,3 +305,32 @@ fn test_e2e_alias_linking() {
         "Alias 'RESTful' should link to REST term anchor"
     );
 }
+
+// =============================================================================
+// Test 12: Split Pattern (Definition Truncation)
+// =============================================================================
+
+#[test]
+fn test_e2e_split_pattern() {
+    let html = read_html("chapter1.html");
+
+    // XMPP term has a definition that uses " -- " delimiter
+
+    // Verify the XMPP link exists
+    assert!(
+        html.contains("reference/glossary.html#xmpp"),
+        "Expected link to XMPP glossary term"
+    );
+
+    // Verify the tooltip contains ONLY the first part (before ;;;)
+    assert!(
+        html.contains(r#"title="Extensible Messaging and Presence Protocol""#),
+        "Expected first part of XMPP definition in tooltip (before ' -- ')"
+    );
+
+    // Verify the tooltip does NOT contain the second part (after ;;;)
+    assert!(
+        !html.contains("open-standard") && !html.contains("decentralized communication"),
+        "Tooltip should not contain text after the ' -- ' delimiter"
+    );
+}

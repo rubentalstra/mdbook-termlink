@@ -14,3 +14,6 @@ JSON
 
 CLI
 : Command Line Interface, a text-based interface for interacting with software.
+
+XMPP
+: Extensible Messaging and Presence Protocol -- An open-standard, XML-based technology for real-time, decentralized communication

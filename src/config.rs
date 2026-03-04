@@ -26,6 +26,8 @@ pub struct Config {
     exclude_pages: Vec<Pattern>,
     /// Additional aliases for terms (term name -> list of aliases).
     aliases: HashMap<String, Vec<String>>,
+    /// Split the hint at spesified pattern
+    split_pattern: Option<String>,
 }
 
 /// Raw configuration as deserialized from book.toml.
@@ -38,6 +40,7 @@ struct RawConfig {
     case_sensitive: Option<bool>,
     exclude_pages: Option<Vec<String>>,
     aliases: Option<HashMap<String, Vec<String>>>,
+    split_pattern: Option<String>,
 }
 
 impl Default for Config {
@@ -49,6 +52,7 @@ impl Default for Config {
             case_sensitive: false,
             exclude_pages: Vec::new(),
             aliases: HashMap::new(),
+            split_pattern: None,
         }
     }
 }
@@ -94,6 +98,7 @@ impl Config {
             case_sensitive: raw.case_sensitive.unwrap_or(false),
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
+            split_pattern: raw.split_pattern,
         })
     }
 
@@ -138,6 +143,12 @@ impl Config {
     #[must_use]
     pub fn aliases(&self, term_name: &str) -> Option<&Vec<String>> {
         self.aliases.get(term_name)
+    }
+
+    /// Checks if a split pattern is provided
+    #[must_use]
+    pub fn split_pattern(&self) -> Option<&str> {
+        self.split_pattern.as_deref()
     }
 
     /// Returns iterator over all aliases (for conflict detection).

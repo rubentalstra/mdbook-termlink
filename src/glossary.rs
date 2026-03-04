@@ -453,8 +453,8 @@ XPT
     #[test]
     fn test_parse_definition_split() {
         let splitted = split_definition(
-            "Extensible Messaging and Presence Protocol ;;; An open-standard, XML-based technology for real-time, decentralized communication",
-            Some(";;;"),
+            "Extensible Messaging and Presence Protocol -- An open-standard, XML-based technology for real-time, decentralized communication",
+            Some(" -- "),
         );
 
         assert_eq!(splitted.is_some(), true);
@@ -462,5 +462,16 @@ XPT
             splitted.unwrap(),
             "Extensible Messaging and Presence Protocol".to_string()
         );
+    }
+
+    #[test]
+    fn test_parse_definition_split_none_config() {
+        let definition = String::from(
+            "Extensible Messaging and Presence Protocol -- An open-standard, XML-based technology for real-time, decentralized communication",
+        );
+        let splitted = split_definition(&definition, None);
+
+        assert_eq!(splitted.is_some(), true);
+        assert_eq!(splitted.unwrap(), definition);
     }
 }

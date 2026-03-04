@@ -226,14 +226,10 @@ fn parse_definition_lists(content: &str, split_pattern: Option<&str>) -> Vec<Ter
 }
 
 fn split_definition(definition: &str, split_pattern: Option<&str>) -> Option<String> {
-    match split_pattern {
-        Some(pattern) => definition
-            .split(pattern)
-            .next()
-            .map(|d| d.trim().to_string()),
-
-        None => Some(definition.to_string()),
-    }
+    split_pattern.map_or_else(
+        || Some(definition.to_string()),
+        |p| definition.split(p).next().map(|d| d.trim().to_string()),
+    )
 }
 
 /// Generates a URL anchor from a term name.
@@ -457,7 +453,7 @@ XPT
             Some(" -- "),
         );
 
-        assert_eq!(splitted.is_some(), true);
+        assert!(splitted.is_some());
         assert_eq!(
             splitted.unwrap(),
             "Extensible Messaging and Presence Protocol".to_string()
@@ -471,7 +467,7 @@ XPT
         );
         let splitted = split_definition(&definition, None);
 
-        assert_eq!(splitted.is_some(), true);
+        assert!(splitted.is_some());
         assert_eq!(splitted.unwrap(), definition);
     }
 }

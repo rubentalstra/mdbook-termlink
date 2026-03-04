@@ -265,10 +265,10 @@ title = 'Test Book'
 split-pattern = ''
 ";
         let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
-        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::from(""));
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
         let conf = Config::from_context(&ctx);
 
-        assert_eq!(conf.is_ok(), true);
+        assert!(conf.is_ok());
         assert_eq!(conf.unwrap().split_pattern(), None);
     }
 }

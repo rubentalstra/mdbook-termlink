@@ -322,13 +322,13 @@ fn test_e2e_split_pattern() {
         "Expected link to XMPP glossary term"
     );
 
-    // Verify the tooltip contains ONLY the first part (before ;;;)
+    // Verify the tooltip contains ONLY the first part (before " -- ")
     assert!(
         html.contains(r#"title="Extensible Messaging and Presence Protocol""#),
         "Expected first part of XMPP definition in tooltip (before ' -- ')"
     );
 
-    // Verify the tooltip does NOT contain the second part (after ;;;)
+    // Verify the tooltip does NOT contain the second part (after " -- ")
     assert!(
         !html.contains("open-standard") && !html.contains("decentralized communication"),
         "Tooltip should not contain text after the ' -- ' delimiter"

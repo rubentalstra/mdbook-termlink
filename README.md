@@ -94,8 +94,9 @@ case-sensitive = false
 # Pages to exclude from term linking (glob patterns)
 exclude-pages = ["changelog.md", "appendix/*"]
 
-# Split definitions at this pattern for shorter tooltips. Disabled by default.
-split-pattern = None
+# Split definitions at this pattern for shorter tooltips.
+# Disabled unless set explicitly to a non-empty string.
+split-pattern = ""
 
 # Alternative names for terms
 [preprocessor.termlink.aliases]

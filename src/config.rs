@@ -98,7 +98,7 @@ impl Config {
             case_sensitive: raw.case_sensitive.unwrap_or(false),
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
-            split_pattern: raw.split_pattern,
+            split_pattern: raw.split_pattern.filter(|p| !p.is_empty()),
         })
     }
 
@@ -159,7 +159,10 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+    use mdbook_preprocessor::config::Config as MdBookConf;
 
     #[test]
     fn test_default_config() {
@@ -251,5 +254,21 @@ mod tests {
         };
 
         assert_eq!(config.all_aliases().count(), 2);
+    }
+
+    #[test]
+    fn test_definition_split_parsing() {
+        let conf_str = r"
+[book]
+title = 'Test Book'
+[preprocessor.termlink]
+split-pattern = ''
+";
+        let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::from(""));
+        let conf = Config::from_context(&ctx);
+
+        assert_eq!(conf.is_ok(), true);
+        assert_eq!(conf.unwrap().split_pattern(), None);
     }
 }

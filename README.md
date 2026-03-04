@@ -18,6 +18,7 @@ documentation.
 - **Exclude Pages**: Skip specific pages from processing using glob patterns
 - **Term Aliases**: Define alternative names that link to the same glossary entry
 - **Short Form Support**: Automatically handles terms like "API (Application Programming Interface)"
+- **Split Definitions**: Split glossary definitions at a custom delimiter, showing only the first part in tooltips while keeping the full definition in the glossary
 
 ## Installation
 
@@ -59,6 +60,9 @@ REST
 
 JSON
 : JavaScript Object Notation, a lightweight data interchange format.
+
+XMPP
+: Extensible Messaging and Presence Protocol -- An open-standard communication technology.
 ```
 
 ### 3. Build your book
@@ -90,6 +94,9 @@ case-sensitive = false
 # Pages to exclude from term linking (glob patterns)
 exclude-pages = ["changelog.md", "appendix/*"]
 
+# Split definitions at this pattern for shorter tooltips. Disabled by default.
+split-pattern = None
+
 # Alternative names for terms
 [preprocessor.termlink.aliases]
 API = ["apis", "api endpoints"]
@@ -98,14 +105,16 @@ REST = ["RESTful"]
 
 ### Options Reference
 
-| Option            | Type    | Default                   | Description                              |
-|-------------------|---------|---------------------------|------------------------------------------|
-| `glossary-path`   | String  | `"reference/glossary.md"` | Path to glossary file relative to `src/` |
-| `link-first-only` | Boolean | `true`                    | Only link first occurrence per page      |
-| `css-class`       | String  | `"glossary-term"`         | CSS class for term links                 |
-| `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching             |
-| `exclude-pages`   | Array   | `[]`                      | Glob patterns for pages to skip          |
-| `aliases`         | Map     | `{}`                      | Alternative names for terms              |
+| Option            | Type    | Default                   | Description                                    |
+|-------------------|---------|---------------------------|------------------------------------------------|
+| `glossary-path`   | String  | `"reference/glossary.md"` | Path to glossary file relative to `src/`       |
+| `link-first-only` | Boolean | `true`                    | Only link first occurrence per page            |
+| `css-class`       | String  | `"glossary-term"`         | CSS class for term links                       |
+| `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching                   |
+| `exclude-pages`   | Array   | `[]`                      | Glob patterns for pages to skip                |
+| `split-pattern`   | String  | Disabled by default       | Split definitions at pattern for short tooltips|
+| `aliases`         | Map     | `{}`                      | Alternative names for terms                    |
+
 
 ## Styling
 
@@ -131,7 +140,7 @@ Example `custom.css`:
 
 ## How It Works
 
-1. **Glossary Parsing**: Parses your glossary file for definition lists (term followed by `: definition`)
+1. **Glossary Parsing**: Parses your glossary file for definition lists (term followed by `: definition`). If `split-pattern` is defined, definitions are shortened to the first item of the splitted definition.
 
 2. **Term Extraction**: Extracts each term with its anchor, short form (if present), and definition
 

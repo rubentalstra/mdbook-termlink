@@ -91,19 +91,21 @@ impl Config {
             })
             .collect();
 
+        let default = Self::default();
+
         Ok(Self {
             glossary_path: raw
                 .glossary_path
                 .map_or_else(|| PathBuf::from("reference/glossary.md"), PathBuf::from),
-            link_first_only: raw.link_first_only.unwrap_or(true),
+            link_first_only: raw.link_first_only.unwrap_or(default.link_first_only),
             css_class: raw
                 .css_class
                 .unwrap_or_else(|| String::from("glossary-term")),
-            case_sensitive: raw.case_sensitive.unwrap_or(false),
+            case_sensitive: raw.case_sensitive.unwrap_or(default.case_sensitive),
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
             split_pattern: raw.split_pattern.filter(|p| !p.is_empty()),
-            process_glossary: raw.process_glossary.unwrap_or(false),
+            process_glossary: raw.process_glossary.unwrap_or(default.process_glossary),
         })
     }
 

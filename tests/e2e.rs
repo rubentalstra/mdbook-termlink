@@ -307,7 +307,63 @@ fn test_e2e_alias_linking() {
 }
 
 // =============================================================================
-// Test 12: Split Pattern (Definition Truncation)
+// Test 12: Admonitions (GitHub-style alerts) - issue #6
+// =============================================================================
+
+#[test]
+fn test_e2e_admonitions_render_with_alert_markup() {
+    let html = read_html("chapter_with_admonitions.html");
+
+    // mdBook emits alerts as a <blockquote> carrying a kind-specific class.
+    // Current mdBook (0.5.x) uses `blockquote-tag-{kind}` (e.g.
+    // `blockquote-tag blockquote-tag-note`). We accept either that naming or
+    // the GitHub-style `markdown-alert-{kind}` as a tolerant forward-compat
+    // hedge — what matters is that the alert kind survives the preprocessor.
+    let lower = html.to_lowercase();
+    for kind in ["note", "tip", "important", "warning", "caution"] {
+        let blockquote_tag = format!("blockquote-tag-{kind}");
+        let markdown_alert = format!("markdown-alert-{kind}");
+        assert!(
+            lower.contains(&blockquote_tag) || lower.contains(&markdown_alert),
+            "Expected an admonition class for `[!{}]` (looking for \
+             `{blockquote_tag}` or `{markdown_alert}`) in \
+             chapter_with_admonitions.html. If this fails, the preprocessor \
+             likely corrupted the `[!{}]` marker.",
+            kind.to_uppercase(),
+            kind.to_uppercase()
+        );
+    }
+
+    // Confirm the literal `[!NOTE]` marker text did NOT leak through to the
+    // rendered HTML — if it did, mdBook treated it as plain blockquote text
+    // instead of an alert.
+    assert!(
+        !html.contains("[!NOTE]") && !html.contains("[!WARNING]"),
+        "Found a literal `[!KIND]` marker in rendered HTML — alert was not \
+         recognized by mdBook (preprocessor likely broke the marker):\n{html}"
+    );
+}
+
+#[test]
+fn test_e2e_termlink_inside_admonition_body() {
+    let html = read_html("chapter_with_admonitions.html");
+
+    // Termlinks must still be injected inside alert bodies — admonitions are
+    // not a "skip" context, only the marker line needs preservation.
+    assert!(
+        html.contains(r#"class="glossary-term""#),
+        "Expected at least one glossary-term link inside an admonition body \
+         in chapter_with_admonitions.html:\n{html}"
+    );
+    assert!(
+        html.contains("reference/glossary.html#api"),
+        "Expected the API termlink inside the [!NOTE] body to resolve to the \
+         glossary anchor"
+    );
+}
+
+// =============================================================================
+// Test 13: Split Pattern (Definition Truncation)
 // =============================================================================
 
 #[test]

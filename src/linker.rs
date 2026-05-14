@@ -36,6 +36,10 @@ pub fn add_term_links(
     options.insert(Options::ENABLE_FOOTNOTES);
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
+    // GFM enables blockquote alerts (`> [!NOTE]` etc.) so they round-trip
+    // through parse → serialize as `Tag::BlockQuote(Some(kind))` instead of
+    // being flattened to plain blockquote text. See issue #6.
+    options.insert(Options::ENABLE_GFM);
 
     let parser = Parser::new_ext(content, options);
     let events: Vec<Event> = parser.collect();
@@ -398,6 +402,45 @@ mod tests {
         // Should NOT include title attribute
         assert!(!result.contains("title="));
         assert!(result.contains(r#"<a href="glossary.html#api""#));
+    }
+
+    #[test]
+    fn test_admonition_marker_preserved_for_all_kinds() {
+        let term = Term::new("API");
+        let terms = vec![term];
+        let config = default_config();
+
+        for kind in ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"] {
+            let input = format!("> [!{kind}]\n> Use the API carefully.\n");
+            let out = add_term_links(&input, &terms, "glossary.html", &config)
+                .unwrap_or_else(|e| panic!("add_term_links failed for {kind}: {e}"));
+
+            assert!(
+                out.contains(&format!("[!{kind}]")),
+                "alert marker [!{kind}] lost in output:\n{out}"
+            );
+            assert!(
+                out.contains(r#"<a href="glossary.html#api""#),
+                "termlink missing inside [!{kind}] body:\n{out}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_admonition_does_not_collide_with_glossary_link() {
+        // A term whose name overlaps the alert marker text (`NOTE`) must not
+        // cause us to corrupt the marker itself.
+        let term = Term::new("NOTE");
+        let terms = vec![term];
+        let config = default_config();
+
+        let out =
+            add_term_links("> [!NOTE]\n> Read this NOTE.\n", &terms, "g.html", &config).unwrap();
+
+        assert!(
+            out.contains("[!NOTE]"),
+            "alert marker [!NOTE] lost in output:\n{out}"
+        );
     }
 
     #[test]

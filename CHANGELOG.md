@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-05-14
+
+### Fixed
+
+- **Admonitions / GitHub-style alerts**: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, and `> [!CAUTION]` blockquotes are no longer corrupted by the preprocessor and now render as proper admonitions in mdBook output (issue [#6](https://github.com/rubentalstra/mdbook-termlink/issues/6) reported by [@DocKDE](https://github.com/DocKDE))
+  - Root cause: the pulldown-cmark parser was built without `Options::ENABLE_GFM`, so alert markers were parsed as plain blockquote text and lost on serialization
+  - Glossary term linking continues to work inside admonition bodies
+
 ## [0.0.6] - 2026-03-04
 
 ### Added
@@ -91,7 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `css-class`: CSS class for term links (default: `glossary-term`)
 - `case-sensitive`: Case-sensitive matching (default: `false`)
 
-[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.7...HEAD
+
+[0.0.7]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.6...v0.0.7
 
 [0.0.6]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.5...v0.0.6
 

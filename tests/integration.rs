@@ -41,10 +41,8 @@ XPT
                 }
                 in_title = false;
             }
-            Event::Text(text) => {
-                if in_title {
-                    current_title.push_str(&text);
-                }
+            Event::Text(text) if in_title => {
+                current_title.push_str(&text);
             }
             _ => {}
         }

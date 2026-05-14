@@ -165,50 +165,42 @@ fn parse_definition_lists(content: &str, split_pattern: Option<&str>) -> Vec<Ter
                     terms.push(Term::new(title));
                 }
             }
-            Event::Start(Tag::DefinitionListTitle) => {
-                if in_definition_list {
-                    // If we have a pending term, save it before starting a new one
-                    if let Some(title) = pending_title.take()
-                        && !title.is_empty()
-                    {
-                        let definition = if current_definition_text.trim().is_empty() {
-                            None
-                        } else {
-                            split_definition(current_definition_text.trim(), split_pattern)
-                        };
-                        terms.push(Term::with_definition(title, definition));
-                    }
-                    in_title = true;
-                    current_title_text.clear();
+            Event::Start(Tag::DefinitionListTitle) if in_definition_list => {
+                // If we have a pending term, save it before starting a new one
+                if let Some(title) = pending_title.take()
+                    && !title.is_empty()
+                {
+                    let definition = if current_definition_text.trim().is_empty() {
+                        None
+                    } else {
+                        split_definition(current_definition_text.trim(), split_pattern)
+                    };
+                    terms.push(Term::with_definition(title, definition));
+                }
+                in_title = true;
+                current_title_text.clear();
+                current_definition_text.clear();
+            }
+            Event::End(TagEnd::DefinitionListTitle) if in_title => {
+                pending_title = Some(current_title_text.trim().to_string());
+                in_title = false;
+            }
+            Event::Start(Tag::DefinitionListDefinition) if in_definition_list => {
+                in_definition = true;
+            }
+            Event::End(TagEnd::DefinitionListDefinition) if in_definition => {
+                in_definition = false;
+                // Apply definition to pending term and save it
+                if let Some(title) = pending_title.take()
+                    && !title.is_empty()
+                {
+                    let definition = if current_definition_text.trim().is_empty() {
+                        None
+                    } else {
+                        split_definition(current_definition_text.trim(), split_pattern)
+                    };
+                    terms.push(Term::with_definition(title, definition));
                     current_definition_text.clear();
-                }
-            }
-            Event::End(TagEnd::DefinitionListTitle) => {
-                if in_title {
-                    pending_title = Some(current_title_text.trim().to_string());
-                    in_title = false;
-                }
-            }
-            Event::Start(Tag::DefinitionListDefinition) => {
-                if in_definition_list {
-                    in_definition = true;
-                }
-            }
-            Event::End(TagEnd::DefinitionListDefinition) => {
-                if in_definition {
-                    in_definition = false;
-                    // Apply definition to pending term and save it
-                    if let Some(title) = pending_title.take()
-                        && !title.is_empty()
-                    {
-                        let definition = if current_definition_text.trim().is_empty() {
-                            None
-                        } else {
-                            split_definition(current_definition_text.trim(), split_pattern)
-                        };
-                        terms.push(Term::with_definition(title, definition));
-                        current_definition_text.clear();
-                    }
                 }
             }
             Event::Text(text) | Event::Code(text) => {

@@ -21,6 +21,7 @@ pub fn add_term_links(
     terms: &[Term],
     glossary_relative_path: &str,
     config: &Config,
+    is_glossary_page: bool,
 ) -> Result<String> {
     // Build term matchers sorted by length (longest first to avoid partial matches)
     let mut sorted_terms: Vec<&Term> = terms.iter().collect();
@@ -51,6 +52,7 @@ pub fn add_term_links(
         glossary_relative_path,
         config,
         &mut linked_terms,
+        is_glossary_page,
     );
 
     // Convert back to markdown
@@ -68,6 +70,7 @@ enum Context {
     Link,
     Heading,
     Image,
+    DefinitionTitle,
 }
 
 /// Processes parser events and adds term links where appropriate.
@@ -77,6 +80,7 @@ fn process_events<'a>(
     glossary_path: &str,
     config: &Config,
     linked_terms: &mut HashSet<String>,
+    is_glossary_page: bool,
 ) -> Vec<Event<'a>> {
     let mut result = Vec::with_capacity(events.len());
     let mut context_stack: Vec<Context> = vec![Context::Normal];
@@ -98,6 +102,14 @@ fn process_events<'a>(
             }
             Event::Start(Tag::Heading { .. }) => {
                 context_stack.push(Context::Heading);
+                result.push(event);
+            }
+            Event::Start(Tag::DefinitionListTitle) if is_glossary_page => {
+                context_stack.push(Context::DefinitionTitle);
+                result.push(event);
+            }
+            Event::End(TagEnd::DefinitionListTitle) if is_glossary_page => {
+                context_stack.pop();
                 result.push(event);
             }
             Event::End(TagEnd::CodeBlock | TagEnd::Link | TagEnd::Image | TagEnd::Heading(_)) => {
@@ -412,7 +424,7 @@ mod tests {
 
         for kind in ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"] {
             let input = format!("> [!{kind}]\n> Use the API carefully.\n");
-            let out = add_term_links(&input, &terms, "glossary.html", &config)
+            let out = add_term_links(&input, &terms, "glossary.html", &config, false)
                 .unwrap_or_else(|e| panic!("add_term_links failed for {kind}: {e}"));
 
             assert!(
@@ -435,7 +447,8 @@ mod tests {
         let config = default_config();
 
         let out =
-            add_term_links("> [!NOTE]\n> Read this NOTE.\n", &terms, "g.html", &config).unwrap();
+            add_term_links("> [!NOTE]\n> Read this NOTE.\n", &terms, "g.html", &config, false)
+                .unwrap();
 
         assert!(
             out.contains("[!NOTE]"),
@@ -462,5 +475,90 @@ mod tests {
         // Should link the alias
         assert!(result.contains(r#"<a href="glossary.html#rest""#));
         assert!(result.contains("RESTful</a>"));
+    }
+
+    #[test]
+    fn test_glossary_page_skips_definition_title() {
+        // On the glossary page, the term title (left of `:`) must not be linkified
+        // (would self-link), but the definition body should be processed.
+        let terms = vec![
+            Term::with_definition("API", Some("Application Programming Interface".to_string())),
+            Term::new("REST"),
+        ];
+        let content = "\
+API
+: A protocol for software. See also REST.
+";
+        let config = Config::default();
+        let output = add_term_links(content, &terms, "", &config, true).unwrap();
+
+        // The title "API" on its own line must remain plain text (no <a> wrapping it as title).
+        // The "REST" mention in the definition body MUST be linked.
+        assert!(
+            output.contains(r##"<a href="#rest""##),
+            "REST in definition body should be linked, got: {output}"
+        );
+        // Critically: there must be no link wrapping the title "API". The title line
+        // appears before the `:`. We assert no `#api` link is produced at all here,
+        // since `API` only appears as a title in this content.
+        assert!(
+            !output.contains(r##"href="#api""##),
+            "API title must not self-link, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_non_glossary_page_does_not_skip_definition_title() {
+        // On a normal page, definition-list titles are NOT skipped — current behavior.
+        let terms = vec![Term::new("API")];
+        let content = "\
+API
+: Some local definition.
+";
+        let config = Config::default();
+        let output = add_term_links(content, &terms, "glossary.html", &config, false).unwrap();
+
+        // Title "API" should be linked because we're not on the glossary page.
+        assert!(
+            output.contains(r#"<a href="glossary.html#api""#),
+            "API title on a non-glossary page should be linked, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_glossary_page_uses_same_page_anchor() {
+        // When emitting links on the glossary page itself, the href is "#anchor"
+        // (no path prefix) so the browser scrolls within the page.
+        let terms = vec![Term::new("API")];
+        let content = "Some prose that mentions the API.";
+        let config = Config::default();
+        let output = add_term_links(content, &terms, "", &config, true).unwrap();
+
+        assert!(
+            output.contains(r##"<a href="#api""##),
+            "Glossary-page links should be same-page anchors, got: {output}"
+        );
+        assert!(
+            !output.contains("glossary.html"),
+            "No file prefix should appear in same-page anchors, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_glossary_page_skips_short_name_in_title() {
+        // Title "API (Application Programming Interface)" should not be linkified
+        // when processing the glossary page — including the short name "API".
+        let terms = vec![Term::new("API (Application Programming Interface)")];
+        let content = "\
+API (Application Programming Interface)
+: The full definition here.
+";
+        let config = Config::default();
+        let output = add_term_links(content, &terms, "", &config, true).unwrap();
+
+        assert!(
+            !output.contains("href=\"#"),
+            "No links should be emitted inside the title, got: {output}"
+        );
     }
 }

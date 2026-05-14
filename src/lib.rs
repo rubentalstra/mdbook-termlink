@@ -117,12 +117,13 @@ impl Preprocessor for TermlinkPreprocessor {
         // 5. Process each chapter
         book.for_each_mut(|item| {
             if let BookItem::Chapter(chapter) = item {
-                // Skip draft chapters and the glossary itself
+                // Skip draft chapters
                 let Some(chapter_path) = chapter.path.as_ref() else {
                     return;
                 };
 
-                if self.config.is_glossary_path(chapter_path) {
+                let is_glossary = self.config.is_glossary_path(chapter_path);
+                if is_glossary && !self.config.process_glossary() {
                     log::debug!("Skipping glossary file: {}", chapter_path.display());
                     return;
                 }
@@ -133,9 +134,13 @@ impl Preprocessor for TermlinkPreprocessor {
                     return;
                 }
 
-                // Calculate relative path from chapter to glossary
-                let relative_glossary =
-                    linker::calculate_relative_path(chapter_path, &glossary_html_path);
+                // Calculate relative path from chapter to glossary.
+                // On the glossary page itself, use same-page anchors (empty path → href="#anchor").
+                let relative_glossary = if is_glossary {
+                    String::new()
+                } else {
+                    linker::calculate_relative_path(chapter_path, &glossary_html_path)
+                };
 
                 // Add term links
                 match linker::add_term_links(
@@ -143,6 +148,7 @@ impl Preprocessor for TermlinkPreprocessor {
                     &terms,
                     &relative_glossary,
                     &self.config,
+                    is_glossary,
                 ) {
                     Ok(new_content) => {
                         chapter.content = new_content;

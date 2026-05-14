@@ -98,6 +98,12 @@ exclude-pages = ["changelog.md", "appendix/*"]
 # Disabled unless set explicitly to a non-empty string.
 split-pattern = ""
 
+# Also add term links inside the glossary page itself.
+# When enabled, term mentions in the prose and inside other terms' definitions
+# get linked (using same-page #anchor hrefs), but the term titles in the
+# definition list are left untouched so they don't self-link.
+process-glossary = false
+
 # Alternative names for terms
 [preprocessor.termlink.aliases]
 API = ["apis", "api endpoints"]
@@ -114,6 +120,7 @@ REST = ["RESTful"]
 | `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching                   |
 | `exclude-pages`   | Array   | `[]`                      | Glob patterns for pages to skip                |
 | `split-pattern`   | String  | Disabled by default       | Split definitions at pattern for short tooltips|
+| `process-glossary`| Boolean | `false`                   | Also link term usages on the glossary page itself (titles are left alone)|
 | `aliases`         | Map     | `{}`                      | Alternative names for terms                    |
 
 

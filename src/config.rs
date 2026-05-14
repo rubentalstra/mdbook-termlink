@@ -28,6 +28,8 @@ pub struct Config {
     aliases: HashMap<String, Vec<String>>,
     /// Split the hint at spesified pattern
     split_pattern: Option<String>,
+    /// Whether to process the glossary page itself (linking term usages, but not the term titles).
+    process_glossary: bool,
 }
 
 /// Raw configuration as deserialized from book.toml.
@@ -41,6 +43,7 @@ struct RawConfig {
     exclude_pages: Option<Vec<String>>,
     aliases: Option<HashMap<String, Vec<String>>>,
     split_pattern: Option<String>,
+    process_glossary: Option<bool>,
 }
 
 impl Default for Config {
@@ -53,6 +56,7 @@ impl Default for Config {
             exclude_pages: Vec::new(),
             aliases: HashMap::new(),
             split_pattern: None,
+            process_glossary: false,
         }
     }
 }
@@ -99,6 +103,7 @@ impl Config {
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
             split_pattern: raw.split_pattern.filter(|p| !p.is_empty()),
+            process_glossary: raw.process_glossary.unwrap_or(false),
         })
     }
 
@@ -124,6 +129,16 @@ impl Config {
     #[must_use]
     pub const fn case_sensitive(&self) -> bool {
         self.case_sensitive
+    }
+
+    /// Returns true if the glossary page itself should be processed.
+    ///
+    /// When true, term usages on the glossary page are linkified (using same-page
+    /// anchors), but the term titles in the definition list are left untouched
+    /// so they don't self-link inside their own definitions.
+    #[must_use]
+    pub const fn process_glossary(&self) -> bool {
+        self.process_glossary
     }
 
     /// Checks if the given path is the glossary file.
@@ -254,6 +269,27 @@ mod tests {
         };
 
         assert_eq!(config.all_aliases().count(), 2);
+    }
+
+    #[test]
+    fn test_process_glossary_default_false() {
+        let config = Config::default();
+        assert!(!config.process_glossary());
+    }
+
+    #[test]
+    fn test_process_glossary_parsed_from_book_toml() {
+        let conf_str = r"
+[book]
+title = 'Test Book'
+[preprocessor.termlink]
+process-glossary = true
+";
+        let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
+        let conf = Config::from_context(&ctx).unwrap();
+
+        assert!(conf.process_glossary());
     }
 
     #[test]

@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-15
+
 ### Added
 
 - **`process-glossary` option**: when set to `true`, glossary term usages on the glossary page itself are linkified using same-page `#anchor` hrefs. Definition-list titles are left untouched so terms don't self-link (PR [#7](https://github.com/rubentalstra/mdbook-termlink/pull/7) by [@bertlebee](https://github.com/bertlebee)). Default is `false`, so existing setups are unchanged.
+
+### Configuration Options
+
+- `process-glossary`: Also link term usages on the glossary page itself (default: `false`).
 
 ## [0.1.0] - 2026-05-15
 
@@ -130,7 +136,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `css-class`: CSS class for term links (default: `glossary-term`)
 - `case-sensitive`: Case-sensitive matching (default: `false`)
 
-[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.1.1...HEAD
+
+[0.1.1]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.1.0...v0.1.1
 
 [0.1.0]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.7...v0.1.0
 

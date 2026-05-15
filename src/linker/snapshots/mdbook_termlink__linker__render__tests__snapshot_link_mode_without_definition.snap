@@ -1,0 +1,5 @@
+---
+source: src/linker/render.rs
+expression: html
+---
+<a href="glossary.html#api" class="glossary-term">API</a>

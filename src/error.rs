@@ -1,6 +1,6 @@
 //! Typed error surface for the termlink library.
 //!
-//! Library functions return [`Result<T, TermlinkError>`]. The CLI in
+//! Library functions return [`Result<T>`]. The CLI in
 //! `main.rs` keeps `anyhow::Result` and lets `?` widen `TermlinkError` into
 //! `anyhow::Error` via the blanket `From<E: std::error::Error>` impl.
 
@@ -33,4 +33,29 @@ pub enum TermlinkError {
     /// `pulldown-cmark-to-cmark` failed to re-serialize the processed events.
     #[error("failed to re-serialize processed markdown")]
     MarkdownSerialize(#[from] pulldown_cmark_to_cmark::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glossary_not_found_display_includes_path() {
+        let err = TermlinkError::GlossaryNotFound(PathBuf::from("reference/glossary.md"));
+        assert_eq!(
+            err.to_string(),
+            "glossary file not found: reference/glossary.md"
+        );
+    }
+
+    #[test]
+    fn alias_conflict_display_includes_both_names() {
+        let err = TermlinkError::AliasConflict {
+            alias: "RESTful".to_string(),
+            term: "API".to_string(),
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("RESTful"));
+        assert!(rendered.contains("API"));
+    }
 }

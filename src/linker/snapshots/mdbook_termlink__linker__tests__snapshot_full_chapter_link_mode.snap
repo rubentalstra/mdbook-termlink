@@ -1,0 +1,14 @@
+---
+source: src/linker/mod.rs
+expression: output
+---
+The <a href="glossary.html#api" title="Application Programming Interface" class="glossary-term">API</a> is great. We also use <a href="glossary.html#rest" title="Representational State Transfer." class="glossary-term">REST</a> for transport.
+
+````rust
+let api = ApiClient::new();
+````
+
+Inline `API` should not link. Visit [the API docs](docs.html).
+
+ > [!NOTE]
+ > The API handles auth, while <a href="glossary.html#xpt" class="glossary-term">XPT</a> is a legacy format.

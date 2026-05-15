@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-15
+
 ### Added
 
 - **Configurable display mode**: New `display-mode` config option lets you choose how glossary occurrences are rendered (issue [#9](https://github.com/rubentalstra/mdbook-termlink/issues/9) suggested by [@DocKDE](https://github.com/DocKDE))
@@ -14,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `"tooltip"`: `<abbr title tabindex class>term</abbr>` — tooltip only, no navigation, keyboard-focusable
   - `"both"`: `<a href class><abbr title tabindex>term</abbr></a>` — anchor wrapping a semantic abbreviation
   - Unknown values fall back to `"link"` with a warning
+- **Typed error surface**: New `TermlinkError` enum (via `thiserror`) replaces `anyhow` at the library boundary. `anyhow` is still used inside `main.rs` only.
+
+### Fixed
+
+- **`extract_short_name` heuristic**: now uses a strict `SHORT (Long Description)` pattern match instead of a fragile length-ratio rule. Previously-rejected inputs like `"AAAA (BB)"` now correctly derive `"AAAA"` as the short form.
+- **Relative glossary path for sibling chapters**: `pathdiff::diff_paths` replaces the hand-rolled `"../".repeat(depth)` calculation. Chapters sharing a directory with the glossary now produce a clean `glossary.html` href instead of an over-generated `../<dir>/glossary.html`.
+
+### Changed
+
+- **Public API tightened**. Library now exports only `TermlinkPreprocessor`, `Config`, `DisplayMode`, and `TermlinkError`. Types previously exported (`Term`, the bare `config` module) are now crate-private.
+- **Module layout** restructured into `config/`, `error.rs`, `glossary/`, `linker/{matcher,render,path}`, and `preprocessor.rs`. Internal-only; no behavior change.
+- **Snapshot tests** (`insta`) replace several hand-written `assert_eq!` HTML comparisons. Snapshot files live under `src/linker/snapshots/`.
 
 ### Configuration Options
 
@@ -111,7 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `css-class`: CSS class for term links (default: `glossary-term`)
 - `case-sensitive`: Case-sensitive matching (default: `false`)
 
-[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.1.0...HEAD
+
+[0.1.0]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.7...v0.1.0
 
 [0.0.7]: https://github.com/rubentalstra/mdbook-termlink/compare/v0.0.6...v0.0.7
 

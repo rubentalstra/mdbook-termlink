@@ -1,0 +1,5 @@
+---
+source: src/linker/render.rs
+expression: html
+---
+<abbr title="Application Programming Interface" tabindex="0" class="glossary-term">API</abbr>

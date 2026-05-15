@@ -3,10 +3,11 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
 use glob::Pattern;
 use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
+
+use crate::error::{Result, TermlinkError};
 
 /// How linked glossary terms should be rendered in the output HTML.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -98,7 +99,7 @@ impl Config {
         let preprocessors: std::collections::BTreeMap<String, RawConfig> = ctx
             .config
             .preprocessors()
-            .context("Failed to parse preprocessor configuration")?;
+            .map_err(|e| TermlinkError::BadConfig(e.into()))?;
 
         // Get the termlink config, or use defaults
         let raw = preprocessors.get("termlink").cloned().unwrap_or_default();

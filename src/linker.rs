@@ -3,12 +3,12 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use anyhow::Result;
 use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use regex::{Regex, RegexBuilder};
 
 use crate::config::{Config, DisplayMode};
+use crate::error::Result;
 use crate::glossary::Term;
 
 /// Adds glossary term links to chapter content.

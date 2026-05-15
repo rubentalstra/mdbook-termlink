@@ -36,15 +36,16 @@
 //! ```
 
 pub mod config;
+pub mod error;
 mod glossary;
 mod linker;
 
 pub use config::{Config, DisplayMode};
+pub use error::TermlinkError;
 pub use glossary::Term;
 
 use std::collections::HashSet;
 
-use anyhow::{Context, Result, bail};
 use mdbook_preprocessor::book::{Book, BookItem};
 use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 
@@ -60,21 +61,16 @@ impl TermlinkPreprocessor {
     /// # Errors
     ///
     /// Returns an error if the configuration in `book.toml` is invalid.
-    pub fn new(ctx: &PreprocessorContext) -> Result<Self> {
+    pub fn new(ctx: &PreprocessorContext) -> error::Result<Self> {
         let config = Config::from_context(ctx)?;
         Ok(Self { config })
     }
-}
 
-impl Preprocessor for TermlinkPreprocessor {
-    fn name(&self) -> &'static str {
-        "termlink"
-    }
-
-    fn run(&self, _ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
+    /// Inner fallible body of [`Preprocessor::run`], returning the typed
+    /// [`TermlinkError`]. The trait impl bridges this into `anyhow::Result`.
+    fn run_inner(&self, mut book: Book) -> error::Result<Book> {
         // 1. Extract terms from glossary
-        let terms = glossary::extract_terms(&book, &self.config)
-            .context("Failed to extract glossary terms")?;
+        let terms = glossary::extract_terms(&book, &self.config)?;
 
         if terms.is_empty() {
             log::warn!(
@@ -94,7 +90,10 @@ impl Preprocessor for TermlinkPreprocessor {
                 let alias_lower = alias.to_lowercase();
                 // Check if alias conflicts with a different term's name
                 if term_names.contains(&alias_lower) && alias_lower != term_name.to_lowercase() {
-                    bail!("Alias '{alias}' for term '{term_name}' conflicts with existing term");
+                    return Err(TermlinkError::AliasConflict {
+                        alias: alias.clone(),
+                        term: term_name.clone(),
+                    });
                 }
             }
         }
@@ -155,5 +154,16 @@ impl Preprocessor for TermlinkPreprocessor {
         });
 
         Ok(book)
+    }
+}
+
+impl Preprocessor for TermlinkPreprocessor {
+    fn name(&self) -> &'static str {
+        "termlink"
+    }
+
+    fn run(&self, _ctx: &PreprocessorContext, book: Book) -> anyhow::Result<Book> {
+        // Bridge the typed library error into anyhow at exactly one place.
+        self.run_inner(book).map_err(anyhow::Error::from)
     }
 }

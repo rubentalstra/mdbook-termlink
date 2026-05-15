@@ -2,11 +2,11 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
 use mdbook_preprocessor::book::{Book, BookItem};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 use crate::Config;
+use crate::error::{Result, TermlinkError};
 
 /// A glossary term extracted from a definition list.
 ///
@@ -131,7 +131,7 @@ fn find_glossary_content(book: &Book, glossary_path: &Path) -> Result<String> {
             return Ok(chapter.content.clone());
         }
     }
-    bail!("Glossary file not found: {}", glossary_path.display())
+    Err(TermlinkError::GlossaryNotFound(glossary_path.to_path_buf()))
 }
 
 /// Parses definition lists from markdown content using pulldown-cmark.

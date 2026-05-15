@@ -42,14 +42,25 @@ impl Glossary {
 
     /// Applies every alias from `config` to its corresponding term, preserving
     /// the longest-first invariant.
+    ///
+    /// The alias map in `book.toml` is keyed by string. For convenience users
+    /// commonly key by a term's *short* form — e.g. `API = ["apis"]` — even
+    /// when the glossary entry uses the longer `SHORT (Long Description)`
+    /// shape. We look up by the full name first, then fall back to the
+    /// short form, so both spellings work.
     #[must_use]
     pub fn with_aliases(mut self, config: &Config) -> Self {
         self.terms = self
             .terms
             .into_iter()
-            .map(|term| match config.aliases(term.name()) {
-                Some(aliases) => term.with_aliases(aliases.clone()),
-                None => term,
+            .map(|term| {
+                let aliases = config
+                    .aliases(term.name())
+                    .or_else(|| term.short_name().and_then(|s| config.aliases(s)));
+                match aliases {
+                    Some(aliases) => term.with_aliases(aliases.clone()),
+                    None => term,
+                }
             })
             .collect();
         // Aliases don't change the term *name* the sort key uses, so the
@@ -132,25 +143,71 @@ mod tests {
     fn with_aliases_attaches_configured_aliases_to_matching_terms() {
         use crate::config::DisplayMode;
         use crate::test_support::config_with_display_mode;
-        use mdbook_preprocessor::PreprocessorContext;
-        use mdbook_preprocessor::config::Config as MdBookConf;
-        use std::str::FromStr;
 
         // Default config has no aliases — applying it should leave terms
         // unchanged.
         let plain = config_with_display_mode(DisplayMode::Link);
         let glossary = Glossary::from_terms(vec![Term::new("REST")]).with_aliases(&plain);
-        assert!(glossary.iter().next().unwrap().searchable_forms() == vec!["REST"]);
+        assert_eq!(
+            glossary.iter().next().unwrap().searchable_forms(),
+            vec!["REST"]
+        );
 
-        // Config with aliases attaches them.
-        let conf_str = "[book]\ntitle='t'\n[preprocessor.termlink.aliases]\nREST = ['RESTful']\n";
-        let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
-        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
-        let config = Config::from_context(&ctx).unwrap();
-
+        // Config with aliases keyed by the term's full name attaches them.
+        let config = config_from_aliases_toml(
+            "[book]\ntitle='t'\n[preprocessor.termlink.aliases]\nREST = ['RESTful']\n",
+        );
         let glossary = Glossary::from_terms(vec![Term::new("REST")]).with_aliases(&config);
         let forms = glossary.iter().next().unwrap().searchable_forms();
         assert!(forms.contains(&"REST"));
         assert!(forms.contains(&"RESTful"));
+    }
+
+    /// Aliases keyed by a term's *short* form must still attach when the
+    /// glossary entry uses the `SHORT (Long Description)` shape. This guards
+    /// against the previously-silent bug where `aliases.API = [...]` was
+    /// ignored because the actual term name was
+    /// `"API (Application Programming Interface)"`.
+    #[test]
+    fn with_aliases_attaches_aliases_keyed_by_short_name() {
+        let config = config_from_aliases_toml(
+            "[book]\ntitle='t'\n[preprocessor.termlink.aliases]\nAPI = ['apis', 'api endpoints']\n",
+        );
+        let term = Term::new("API (Application Programming Interface)");
+        let glossary = Glossary::from_terms(vec![term]).with_aliases(&config);
+
+        let forms = glossary.iter().next().unwrap().searchable_forms();
+        assert!(forms.contains(&"apis"), "missing 'apis' alias: {forms:?}");
+        assert!(
+            forms.contains(&"api endpoints"),
+            "missing 'api endpoints' alias: {forms:?}"
+        );
+    }
+
+    /// When both the full name and the short form have entries, the full-name
+    /// entry wins. Keeps existing user setups stable.
+    #[test]
+    fn with_aliases_prefers_full_name_over_short_name_when_both_present() {
+        let config = config_from_aliases_toml(
+            "[book]\ntitle='t'\n[preprocessor.termlink.aliases]\n\
+             API = ['short-wins']\n\
+             \"API (Application Programming Interface)\" = ['fullname-wins']\n",
+        );
+        let term = Term::new("API (Application Programming Interface)");
+        let glossary = Glossary::from_terms(vec![term]).with_aliases(&config);
+
+        let forms = glossary.iter().next().unwrap().searchable_forms();
+        assert!(forms.contains(&"fullname-wins"));
+        assert!(!forms.contains(&"short-wins"));
+    }
+
+    fn config_from_aliases_toml(toml: &str) -> Config {
+        use mdbook_preprocessor::PreprocessorContext;
+        use mdbook_preprocessor::config::Config as MdBookConf;
+        use std::str::FromStr;
+
+        let mdb_conf = MdBookConf::from_str(toml).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
+        Config::from_context(&ctx).unwrap()
     }
 }

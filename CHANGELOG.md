@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`extract_short_name` heuristic**: now uses a strict `SHORT (Long Description)` pattern match instead of a fragile length-ratio rule. Previously-rejected inputs like `"AAAA (BB)"` now correctly derive `"AAAA"` as the short form.
 - **Relative glossary path for sibling chapters**: `pathdiff::diff_paths` replaces the hand-rolled `"../".repeat(depth)` calculation. Chapters sharing a directory with the glossary now produce a clean `glossary.html` href instead of an over-generated `../<dir>/glossary.html`.
+- **Aliases keyed by a term's short form**: an alias map entry like `API = ["apis"]` now attaches to a glossary entry written as `"API (Application Programming Interface)"`. Previously the alias was silently ignored because the lookup used the full name. Full-name keys keep working and still take precedence when both are present.
 
 ### Changed
 

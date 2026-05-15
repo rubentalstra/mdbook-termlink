@@ -13,7 +13,7 @@ documentation.
 
 - **Automatic Term Linking**: Parses glossary terms from Markdown definition lists and links them throughout your book
 - **Smart Context Detection**: Skips code blocks, inline code, existing links, headings, and images
-- **Tooltip Preview**: Displays term definitions on hover via HTML `title` attribute
+- **Tooltip Preview**: Displays term definitions on hover via HTML `title` attribute (configurable: link, tooltip-only, or both via `display-mode`)
 - **Configurable Matching**: Case-insensitive matching with link-first-only option per page
 - **Exclude Pages**: Skip specific pages from processing using glob patterns
 - **Term Aliases**: Define alternative names that link to the same glossary entry
@@ -98,6 +98,12 @@ exclude-pages = ["changelog.md", "appendix/*"]
 # Disabled unless set explicitly to a non-empty string.
 split-pattern = ""
 
+# How linked terms are rendered: "link", "tooltip", or "both".
+# - link    : <a href title class>term</a>            (default; navigable, browser tooltip)
+# - tooltip : <abbr title tabindex class>term</abbr>  (tooltip only, no navigation)
+# - both    : <a href class><abbr title tabindex>term</abbr></a>
+display-mode = "link"
+
 # Also add term links inside the glossary page itself.
 # When enabled, term mentions in the prose and inside other terms' definitions
 # get linked (using same-page #anchor hrefs), but the term titles in the
@@ -120,6 +126,7 @@ REST = ["RESTful"]
 | `case-sensitive`  | Boolean | `false`                   | Case-sensitive term matching                   |
 | `exclude-pages`   | Array   | `[]`                      | Glob patterns for pages to skip                |
 | `split-pattern`   | String  | Disabled by default       | Split definitions at pattern for short tooltips|
+| `display-mode`    | String  | `"link"`                  | Render terms as `link`, `tooltip`, or `both`   |
 | `process-glossary`| Boolean | `false`                   | Also link term usages on the glossary page itself (titles are left alone)|
 | `aliases`         | Map     | `{}`                      | Alternative names for terms                    |
 
@@ -155,11 +162,24 @@ Example `custom.css`:
 3. **Content Processing**: Processes each chapter, matching terms using word boundaries while skipping protected
    contexts
 
-4. **Link Generation**: Replaces terms with HTML links including tooltip definitions:
+4. **Link Generation**: Replaces terms with HTML markup. The shape depends on `display-mode`:
+
    ```html
+   <!-- display-mode = "link" (default) -->
    <a href="../reference/glossary.html#api"
       title="A set of protocols and tools for building software applications."
       class="glossary-term">API</a>
+
+   <!-- display-mode = "tooltip" -->
+   <abbr title="A set of protocols and tools for building software applications."
+         tabindex="0"
+         class="glossary-term">API</abbr>
+
+   <!-- display-mode = "both" -->
+   <a href="../reference/glossary.html#api" class="glossary-term">
+     <abbr title="A set of protocols and tools for building software applications."
+           tabindex="0">API</abbr>
+   </a>
    ```
 
 ## Requirements
@@ -194,6 +214,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Ruben Talstra](https://github.com/rubentalstra) — Creator & Maintainer
 - [Juuso Elo-Rauta](https://github.com/eloraju) — Split Definitions feature ([#5](https://github.com/rubentalstra/mdbook-termlink/pull/5))
+- [Rob W](https://github.com/bertlebee) — `process-glossary` option ([#7](https://github.com/rubentalstra/mdbook-termlink/pull/7))
 
 ## Contributing
 

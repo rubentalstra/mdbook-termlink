@@ -1,0 +1,5 @@
+---
+source: src/linker/mod.rs
+expression: output
+---
+The <a href="glossary.html#api" class="glossary-term"><abbr title="Application Programming Interface" tabindex="0">API</abbr></a> and <a href="glossary.html#rest" class="glossary-term"><abbr title="Representational State Transfer." tabindex="0">REST</abbr></a> are linked in both mode.

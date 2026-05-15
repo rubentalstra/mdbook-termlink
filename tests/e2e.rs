@@ -292,17 +292,30 @@ fn test_e2e_exclude_pages() {
 fn test_e2e_alias_linking() {
     let html = read_html("chapter_with_aliases.html");
 
-    // "apis" (lowercase plural) should link to #api anchor
-    // This tests that aliases work correctly
+    // The `apis` alias must be wrapped in a glossary link (not merely appear
+    // as the URL fragment of some other link). This catches the historical
+    // bug where short-name alias keys silently failed for parenthesized
+    // glossary entries.
     assert!(
-        html.contains("reference/glossary.html#api"),
-        "Alias 'apis' should link to API term anchor"
+        html.contains(r">apis</a>"),
+        "Alias 'apis' should be wrapped in a glossary link.\nHTML:\n{html}"
     );
 
-    // "RESTful" should link to #rest anchor
+    // "RESTful" should link to #rest anchor.
     assert!(
-        html.contains("reference/glossary.html#rest"),
-        "Alias 'RESTful' should link to REST term anchor"
+        html.contains(r">RESTful</a>"),
+        "Alias 'RESTful' should be wrapped in a glossary link.\nHTML:\n{html}"
+    );
+
+    // The chapter contains an `API endpoints` substring too, which is another
+    // configured alias. `link-first-only` means only the first match wins —
+    // verify exactly one glossary link points at the API anchor.
+    let api_link_count = html
+        .matches("glossary.html#api-application-programming-interface")
+        .count();
+    assert_eq!(
+        api_link_count, 1,
+        "Expected exactly one link to the API anchor (link-first-only=true), found {api_link_count}"
     );
 }
 

@@ -1,12 +1,17 @@
 //! Configuration parsing for the termlink preprocessor.
 
+mod display_mode;
+
+pub use display_mode::DisplayMode;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
 use glob::Pattern;
 use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
+
+use crate::error::{Result, TermlinkError};
 
 /// Configuration for the termlink preprocessor.
 ///
@@ -14,25 +19,18 @@ use serde::Deserialize;
 /// Use the getter methods to access configuration values.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Path to the glossary file relative to src directory.
     glossary_path: PathBuf,
-    /// Whether to only link the first occurrence of each term per page.
     link_first_only: bool,
-    /// CSS class to apply to glossary term links.
     css_class: String,
-    /// Whether term matching should be case-sensitive.
     case_sensitive: bool,
-    /// Glob patterns for pages to exclude from term linking.
     exclude_pages: Vec<Pattern>,
-    /// Additional aliases for terms (term name -> list of aliases).
     aliases: HashMap<String, Vec<String>>,
-    /// Split the hint at spesified pattern
     split_pattern: Option<String>,
-    /// Whether to process the glossary page itself (linking term usages, but not the term titles).
+    display_mode: DisplayMode,
     process_glossary: bool,
 }
 
-/// Raw configuration as deserialized from book.toml.
+/// Raw configuration as deserialized from `book.toml`.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 struct RawConfig {
@@ -43,6 +41,7 @@ struct RawConfig {
     exclude_pages: Option<Vec<String>>,
     aliases: Option<HashMap<String, Vec<String>>>,
     split_pattern: Option<String>,
+    display_mode: Option<String>,
     process_glossary: Option<bool>,
 }
 
@@ -56,6 +55,7 @@ impl Default for Config {
             exclude_pages: Vec::new(),
             aliases: HashMap::new(),
             split_pattern: None,
+            display_mode: DisplayMode::default(),
             process_glossary: false,
         }
     }
@@ -64,20 +64,22 @@ impl Default for Config {
 impl Config {
     /// Creates configuration from the preprocessor context.
     ///
+    /// Unknown `display-mode` values fall back to the default with a
+    /// `log::warn!`; invalid glob patterns under `exclude-pages` are dropped
+    /// the same way. These are user-typo cases, not hard errors.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the configuration in `book.toml` is malformed.
+    /// Returns [`TermlinkError::BadConfig`] if `[preprocessor.termlink]` in
+    /// `book.toml` fails to deserialize.
     pub fn from_context(ctx: &PreprocessorContext) -> Result<Self> {
-        // Get all preprocessor configs as a BTreeMap
         let preprocessors: std::collections::BTreeMap<String, RawConfig> = ctx
             .config
             .preprocessors()
-            .context("Failed to parse preprocessor configuration")?;
+            .map_err(|e| TermlinkError::BadConfig(e.into()))?;
 
-        // Get the termlink config, or use defaults
         let raw = preprocessors.get("termlink").cloned().unwrap_or_default();
 
-        // Parse exclude-pages glob patterns with warnings for invalid patterns
         let exclude_pages: Vec<Pattern> = raw
             .exclude_pages
             .unwrap_or_default()
@@ -91,21 +93,30 @@ impl Config {
             })
             .collect();
 
-        let default = Self::default();
+        let display_mode = raw
+            .display_mode
+            .as_deref()
+            .map_or_else(DisplayMode::default, |v| {
+                v.parse::<DisplayMode>().unwrap_or_else(|err| {
+                    log::warn!("{err}. Falling back to 'link'.");
+                    DisplayMode::default()
+                })
+            });
 
         Ok(Self {
             glossary_path: raw
                 .glossary_path
                 .map_or_else(|| PathBuf::from("reference/glossary.md"), PathBuf::from),
-            link_first_only: raw.link_first_only.unwrap_or(default.link_first_only),
+            link_first_only: raw.link_first_only.unwrap_or(true),
             css_class: raw
                 .css_class
                 .unwrap_or_else(|| String::from("glossary-term")),
-            case_sensitive: raw.case_sensitive.unwrap_or(default.case_sensitive),
+            case_sensitive: raw.case_sensitive.unwrap_or(false),
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
             split_pattern: raw.split_pattern.filter(|p| !p.is_empty()),
-            process_glossary: raw.process_glossary.unwrap_or(default.process_glossary),
+            display_mode,
+            process_glossary: raw.process_glossary.unwrap_or(false),
         })
     }
 
@@ -133,16 +144,6 @@ impl Config {
         self.case_sensitive
     }
 
-    /// Returns true if the glossary page itself should be processed.
-    ///
-    /// When true, term usages on the glossary page are linkified (using same-page
-    /// anchors), but the term titles in the definition list are left untouched
-    /// so they don't self-link inside their own definitions.
-    #[must_use]
-    pub const fn process_glossary(&self) -> bool {
-        self.process_glossary
-    }
-
     /// Checks if the given path is the glossary file.
     #[must_use]
     pub fn is_glossary_path(&self, path: &Path) -> bool {
@@ -162,13 +163,30 @@ impl Config {
         self.aliases.get(term_name)
     }
 
-    /// Checks if a split pattern is provided
+    /// Returns the split delimiter for glossary definitions, if configured.
     #[must_use]
     pub fn split_pattern(&self) -> Option<&str> {
         self.split_pattern.as_deref()
     }
 
-    /// Returns iterator over all aliases (for conflict detection).
+    /// Returns how linked terms should be rendered.
+    #[must_use]
+    pub const fn display_mode(&self) -> DisplayMode {
+        self.display_mode
+    }
+
+    /// Returns true if the glossary page itself should be processed.
+    ///
+    /// When true, term usages in the glossary page's prose and inside other
+    /// terms' definitions are linkified (with same-page `#anchor` hrefs), but
+    /// the definition-list titles are left untouched so a term never
+    /// self-links.
+    #[must_use]
+    pub const fn process_glossary(&self) -> bool {
+        self.process_glossary
+    }
+
+    /// Returns an iterator over every configured alias (for conflict detection).
     pub fn all_aliases(&self) -> impl Iterator<Item = (&String, &Vec<String>)> {
         self.aliases.iter()
     }
@@ -181,87 +199,50 @@ mod tests {
     use super::*;
     use mdbook_preprocessor::config::Config as MdBookConf;
 
+    fn config_from_toml(toml: &str) -> Result<Config> {
+        let mdb_conf = MdBookConf::from_str(toml).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
+        Config::from_context(&ctx)
+    }
+
     #[test]
-    fn test_default_config() {
+    fn default_config_has_expected_values() {
         let config = Config::default();
         assert_eq!(config.glossary_path(), Path::new("reference/glossary.md"));
         assert!(config.link_first_only());
         assert_eq!(config.css_class(), "glossary-term");
         assert!(!config.case_sensitive());
+        assert_eq!(config.display_mode(), DisplayMode::Link);
+        assert!(!config.process_glossary());
     }
 
     #[test]
-    fn test_is_glossary_path_exact_match() {
+    fn is_glossary_path_exact_and_suffix_match() {
         let config = Config::default();
         assert!(config.is_glossary_path(Path::new("reference/glossary.md")));
-    }
-
-    #[test]
-    fn test_is_glossary_path_suffix_match() {
-        let config = Config::default();
         assert!(config.is_glossary_path(Path::new("src/reference/glossary.md")));
-    }
-
-    #[test]
-    fn test_is_glossary_path_no_match() {
-        let config = Config::default();
         assert!(!config.is_glossary_path(Path::new("chapter1.md")));
         assert!(!config.is_glossary_path(Path::new("glossary.md")));
     }
 
     #[test]
-    fn test_should_exclude_exact_match() {
+    fn should_exclude_matches_exact_wildcard_and_recursive_patterns() {
         let config = Config {
-            exclude_pages: vec![Pattern::new("changelog.md").unwrap()],
+            exclude_pages: vec![
+                Pattern::new("changelog.md").unwrap(),
+                Pattern::new("appendix/*").unwrap(),
+                Pattern::new("**/draft-*.md").unwrap(),
+            ],
             ..Default::default()
         };
         assert!(config.should_exclude(Path::new("changelog.md")));
-        assert!(!config.should_exclude(Path::new("chapter1.md")));
-    }
-
-    #[test]
-    fn test_should_exclude_wildcard() {
-        let config = Config {
-            exclude_pages: vec![Pattern::new("appendix/*").unwrap()],
-            ..Default::default()
-        };
         assert!(config.should_exclude(Path::new("appendix/a.md")));
-        assert!(config.should_exclude(Path::new("appendix/b.md")));
+        assert!(config.should_exclude(Path::new("chapters/draft-x.md")));
         assert!(!config.should_exclude(Path::new("chapter1.md")));
     }
 
     #[test]
-    fn test_should_exclude_recursive_glob() {
-        let config = Config {
-            exclude_pages: vec![Pattern::new("**/draft-*.md").unwrap()],
-            ..Default::default()
-        };
-        assert!(config.should_exclude(Path::new("draft-intro.md")));
-        assert!(config.should_exclude(Path::new("chapters/draft-chapter1.md")));
-        assert!(!config.should_exclude(Path::new("chapter1.md")));
-    }
-
-    #[test]
-    fn test_aliases_getter() {
-        let mut aliases = HashMap::new();
-        aliases.insert(
-            "API".to_string(),
-            vec!["apis".to_string(), "api endpoint".to_string()],
-        );
-        let config = Config {
-            aliases,
-            ..Default::default()
-        };
-
-        assert_eq!(
-            config.aliases("API"),
-            Some(&vec!["apis".to_string(), "api endpoint".to_string()])
-        );
-        assert_eq!(config.aliases("REST"), None);
-    }
-
-    #[test]
-    fn test_all_aliases_iterator() {
+    fn aliases_getter_and_iterator() {
         let mut aliases = HashMap::new();
         aliases.insert("API".to_string(), vec!["apis".to_string()]);
         aliases.insert("REST".to_string(), vec!["RESTful".to_string()]);
@@ -269,44 +250,52 @@ mod tests {
             aliases,
             ..Default::default()
         };
-
+        assert_eq!(config.aliases("API"), Some(&vec!["apis".to_string()]));
+        assert_eq!(config.aliases("none"), None);
         assert_eq!(config.all_aliases().count(), 2);
     }
 
     #[test]
-    fn test_process_glossary_default_false() {
-        let config = Config::default();
-        assert!(!config.process_glossary());
+    fn empty_split_pattern_disables_splitting() {
+        let conf =
+            config_from_toml("[book]\ntitle = 'T'\n[preprocessor.termlink]\nsplit-pattern = ''\n")
+                .unwrap();
+        assert_eq!(conf.split_pattern(), None);
     }
 
     #[test]
-    fn test_process_glossary_parsed_from_book_toml() {
-        let conf_str = r"
-[book]
-title = 'Test Book'
-[preprocessor.termlink]
-process-glossary = true
-";
-        let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
-        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
-        let conf = Config::from_context(&ctx).unwrap();
+    fn display_mode_parses_each_variant_from_toml() {
+        for (value, expected) in [
+            ("link", DisplayMode::Link),
+            ("tooltip", DisplayMode::Tooltip),
+            ("both", DisplayMode::Both),
+        ] {
+            let toml =
+                format!("[book]\ntitle = 'T'\n[preprocessor.termlink]\ndisplay-mode = '{value}'\n");
+            assert_eq!(config_from_toml(&toml).unwrap().display_mode(), expected);
+        }
+    }
 
+    #[test]
+    fn display_mode_invalid_value_falls_back_to_link() {
+        for value in ["nonsense", ""] {
+            let toml =
+                format!("[book]\ntitle = 'T'\n[preprocessor.termlink]\ndisplay-mode = '{value}'\n");
+            assert_eq!(
+                config_from_toml(&toml).unwrap().display_mode(),
+                DisplayMode::Link
+            );
+        }
+    }
+
+    #[test]
+    fn process_glossary_defaults_to_false_and_parses_true_from_book_toml() {
+        assert!(!Config::default().process_glossary());
+
+        let conf = config_from_toml(
+            "[book]\ntitle = 'T'\n[preprocessor.termlink]\nprocess-glossary = true\n",
+        )
+        .unwrap();
         assert!(conf.process_glossary());
-    }
-
-    #[test]
-    fn test_definition_split_parsing() {
-        let conf_str = r"
-[book]
-title = 'Test Book'
-[preprocessor.termlink]
-split-pattern = ''
-";
-        let mdb_conf = MdBookConf::from_str(conf_str).unwrap();
-        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
-        let conf = Config::from_context(&ctx);
-
-        assert!(conf.is_ok());
-        assert_eq!(conf.unwrap().split_pattern(), None);
     }
 }

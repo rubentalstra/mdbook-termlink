@@ -1,0 +1,5 @@
+---
+source: src/linker/mod.rs
+expression: output
+---
+The <abbr title="Application Programming Interface" tabindex="0" class="glossary-term">API</abbr> and <abbr title="Representational State Transfer." tabindex="0" class="glossary-term">REST</abbr> are linked in tooltip mode.

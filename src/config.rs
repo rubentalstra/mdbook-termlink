@@ -8,6 +8,32 @@ use glob::Pattern;
 use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
 
+/// How linked glossary terms should be rendered in the output HTML.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DisplayMode {
+    /// Anchor with `title` attribute. Navigates to the glossary entry; the
+    /// browser surfaces the definition as a native hover tooltip.
+    #[default]
+    Link,
+    /// `<abbr>` with `title` and `tabindex="0"`. No navigation — definition is
+    /// shown purely as a tooltip (also keyboard-focusable).
+    Tooltip,
+    /// `<a>` wrapping `<abbr>`. Term is navigable *and* carries an explicit
+    /// abbreviation/tooltip semantic element.
+    Both,
+}
+
+impl DisplayMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "link" => Some(Self::Link),
+            "tooltip" => Some(Self::Tooltip),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+}
+
 /// Configuration for the termlink preprocessor.
 ///
 /// All fields are private to allow future changes without breaking the API.
@@ -28,6 +54,8 @@ pub struct Config {
     aliases: HashMap<String, Vec<String>>,
     /// Split the hint at spesified pattern
     split_pattern: Option<String>,
+    /// How linked terms should be rendered (link / tooltip / both).
+    display_mode: DisplayMode,
 }
 
 /// Raw configuration as deserialized from book.toml.
@@ -41,6 +69,7 @@ struct RawConfig {
     exclude_pages: Option<Vec<String>>,
     aliases: Option<HashMap<String, Vec<String>>>,
     split_pattern: Option<String>,
+    display_mode: Option<String>,
 }
 
 impl Default for Config {
@@ -53,6 +82,7 @@ impl Default for Config {
             exclude_pages: Vec::new(),
             aliases: HashMap::new(),
             split_pattern: None,
+            display_mode: DisplayMode::default(),
         }
     }
 }
@@ -99,6 +129,18 @@ impl Config {
             exclude_pages,
             aliases: raw.aliases.unwrap_or_default(),
             split_pattern: raw.split_pattern.filter(|p| !p.is_empty()),
+            display_mode: raw
+                .display_mode
+                .as_deref()
+                .map_or_else(DisplayMode::default, |v| {
+                    DisplayMode::parse(v).unwrap_or_else(|| {
+                        log::warn!(
+                            "Invalid display-mode '{v}'; expected one of \
+                             'link', 'tooltip', 'both'. Falling back to 'link'."
+                        );
+                        DisplayMode::Link
+                    })
+                }),
         })
     }
 
@@ -149,6 +191,12 @@ impl Config {
     #[must_use]
     pub fn split_pattern(&self) -> Option<&str> {
         self.split_pattern.as_deref()
+    }
+
+    /// Returns how linked terms should be rendered.
+    #[must_use]
+    pub const fn display_mode(&self) -> DisplayMode {
+        self.display_mode
     }
 
     /// Returns iterator over all aliases (for conflict detection).
@@ -270,5 +318,33 @@ split-pattern = ''
 
         assert!(conf.is_ok());
         assert_eq!(conf.unwrap().split_pattern(), None);
+    }
+
+    #[test]
+    fn test_display_mode_default_is_link() {
+        let config = Config::default();
+        assert_eq!(config.display_mode(), DisplayMode::Link);
+    }
+
+    fn parse_display_mode(value: &str) -> DisplayMode {
+        let conf_str = format!(
+            "[book]\ntitle = 'Test Book'\n[preprocessor.termlink]\ndisplay-mode = '{value}'\n"
+        );
+        let mdb_conf = MdBookConf::from_str(&conf_str).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
+        Config::from_context(&ctx).unwrap().display_mode()
+    }
+
+    #[test]
+    fn test_display_mode_parse_link_tooltip_both() {
+        assert_eq!(parse_display_mode("link"), DisplayMode::Link);
+        assert_eq!(parse_display_mode("tooltip"), DisplayMode::Tooltip);
+        assert_eq!(parse_display_mode("both"), DisplayMode::Both);
+    }
+
+    #[test]
+    fn test_display_mode_invalid_falls_back_to_link() {
+        assert_eq!(parse_display_mode("nonsense"), DisplayMode::Link);
+        assert_eq!(parse_display_mode(""), DisplayMode::Link);
     }
 }

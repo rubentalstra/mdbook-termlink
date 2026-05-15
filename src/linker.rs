@@ -8,7 +8,7 @@ use pulldown_cmark::{CowStr, Event, Options, Parser, Tag, TagEnd};
 use pulldown_cmark_to_cmark::cmark;
 use regex::{Regex, RegexBuilder};
 
-use crate::config::Config;
+use crate::config::{Config, DisplayMode};
 use crate::glossary::Term;
 
 /// Adds glossary term links to chapter content.
@@ -157,18 +157,7 @@ fn replace_terms_to_events(
 
         if let Some(mat) = regex.find(text) {
             let matched_text = &text[mat.start()..mat.end()];
-            let title_attr = term
-                .definition()
-                .map(|d| format!(r#" title="{}""#, html_escape(d)))
-                .unwrap_or_default();
-            let link = format!(
-                r#"<a href="{}#{}"{} class="{}">{}</a>"#,
-                glossary_path,
-                term.anchor(),
-                title_attr,
-                config.css_class(),
-                html_escape(matched_text),
-            );
+            let link = render_term_html(term, matched_text, glossary_path, config);
 
             matches.push((mat.start(), mat.end(), link));
             linked_terms.insert(term.anchor().to_string());
@@ -210,6 +199,35 @@ fn replace_terms_to_events(
     }
 
     events
+}
+
+/// Renders the HTML snippet for a single term occurrence according to the
+/// configured `DisplayMode`.
+fn render_term_html(
+    term: &Term,
+    matched_text: &str,
+    glossary_path: &str,
+    config: &Config,
+) -> String {
+    let title_attr = term
+        .definition()
+        .map(|d| format!(r#" title="{}""#, html_escape(d)))
+        .unwrap_or_default();
+    let css_class = config.css_class();
+    let escaped = html_escape(matched_text);
+    let anchor = term.anchor();
+
+    match config.display_mode() {
+        DisplayMode::Link => format!(
+            r#"<a href="{glossary_path}#{anchor}"{title_attr} class="{css_class}">{escaped}</a>"#,
+        ),
+        DisplayMode::Tooltip => {
+            format!(r#"<abbr{title_attr} tabindex="0" class="{css_class}">{escaped}</abbr>"#)
+        }
+        DisplayMode::Both => format!(
+            r#"<a href="{glossary_path}#{anchor}" class="{css_class}"><abbr{title_attr} tabindex="0">{escaped}</abbr></a>"#,
+        ),
+    }
 }
 
 /// Builds a regex pattern for matching a term.
@@ -441,6 +459,122 @@ mod tests {
             out.contains("[!NOTE]"),
             "alert marker [!NOTE] lost in output:\n{out}"
         );
+    }
+
+    fn config_with_mode(mode: DisplayMode) -> Config {
+        // Round-trip through book.toml so DisplayMode parsing is also exercised.
+        use mdbook_preprocessor::PreprocessorContext;
+        use mdbook_preprocessor::config::Config as MdBookConf;
+        use std::path::PathBuf;
+        use std::str::FromStr;
+
+        let mode_str = match mode {
+            DisplayMode::Link => "link",
+            DisplayMode::Tooltip => "tooltip",
+            DisplayMode::Both => "both",
+        };
+        let conf_str = format!(
+            "[book]\ntitle = 'Test'\n[preprocessor.termlink]\ndisplay-mode = '{mode_str}'\n"
+        );
+        let mdb_conf = MdBookConf::from_str(&conf_str).unwrap();
+        let ctx = PreprocessorContext::new(PathBuf::new(), mdb_conf, String::new());
+        Config::from_context(&ctx).unwrap()
+    }
+
+    #[test]
+    fn test_display_mode_link_default_emits_anchor_with_title() {
+        let term =
+            Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let terms: Vec<&Term> = vec![&term];
+        let config = config_with_mode(DisplayMode::Link);
+        let mut linked = HashSet::new();
+
+        let events = replace_terms_to_events(
+            "Use the API now.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+        let result = events_to_string(&events);
+
+        assert!(result.contains(r#"<a href="glossary.html#api""#));
+        assert!(result.contains(r#"title="Application Programming Interface""#));
+        assert!(result.contains(r#"class="glossary-term""#));
+        assert!(!result.contains("<abbr"));
+    }
+
+    #[test]
+    fn test_display_mode_tooltip_emits_abbr_without_link() {
+        let term =
+            Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let terms: Vec<&Term> = vec![&term];
+        let config = config_with_mode(DisplayMode::Tooltip);
+        let mut linked = HashSet::new();
+
+        let events = replace_terms_to_events(
+            "Use the API now.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+        let result = events_to_string(&events);
+
+        assert!(result.contains("<abbr"));
+        assert!(result.contains(r#"title="Application Programming Interface""#));
+        assert!(result.contains(r#"tabindex="0""#));
+        assert!(result.contains(r#"class="glossary-term""#));
+        assert!(!result.contains("href="));
+        assert!(!result.contains("<a "));
+    }
+
+    #[test]
+    fn test_display_mode_both_wraps_abbr_in_anchor() {
+        let term =
+            Term::with_definition("API", Some("Application Programming Interface".to_string()));
+        let terms: Vec<&Term> = vec![&term];
+        let config = config_with_mode(DisplayMode::Both);
+        let mut linked = HashSet::new();
+
+        let events = replace_terms_to_events(
+            "Use the API now.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+        let result = events_to_string(&events);
+
+        // Outer anchor: href + class, no title on the anchor itself.
+        assert!(result.contains(r#"<a href="glossary.html#api" class="glossary-term">"#));
+        // Inner abbr: title + tabindex, no class (class lives on the anchor).
+        assert!(result.contains(
+            r#"<abbr title="Application Programming Interface" tabindex="0">API</abbr>"#
+        ));
+        assert!(result.contains("</a>"));
+    }
+
+    #[test]
+    fn test_display_mode_tooltip_without_definition_omits_title() {
+        let term = Term::new("API"); // no definition
+        let terms: Vec<&Term> = vec![&term];
+        let config = config_with_mode(DisplayMode::Tooltip);
+        let mut linked = HashSet::new();
+
+        let events = replace_terms_to_events(
+            "Use the API now.",
+            &terms,
+            "glossary.html",
+            &config,
+            &mut linked,
+        );
+        let result = events_to_string(&events);
+
+        assert!(result.contains("<abbr"));
+        assert!(!result.contains("title="));
+        assert!(result.contains(r#"tabindex="0""#));
+        assert!(result.contains("API</abbr>"));
     }
 
     #[test]

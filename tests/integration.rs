@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use mdbook_termlink::{Config, Term};
+use mdbook_termlink::{Config, DisplayMode, Term};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 #[test]
@@ -92,6 +92,7 @@ fn test_config_defaults() {
     assert!(config.link_first_only());
     assert_eq!(config.css_class(), "glossary-term");
     assert!(!config.case_sensitive());
+    assert_eq!(config.display_mode(), DisplayMode::Link);
 }
 
 #[test]

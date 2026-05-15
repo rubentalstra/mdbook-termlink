@@ -39,7 +39,7 @@ pub mod config;
 mod glossary;
 mod linker;
 
-pub use config::Config;
+pub use config::{Config, DisplayMode};
 pub use glossary::Term;
 
 use std::collections::HashSet;

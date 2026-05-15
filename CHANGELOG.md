@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable display mode**: New `display-mode` config option lets you choose how glossary occurrences are rendered (issue [#9](https://github.com/rubentalstra/mdbook-termlink/issues/9) suggested by [@DocKDE](https://github.com/DocKDE))
+  - `"link"` *(default — unchanged)*: `<a href title class>term</a>` — anchor with native browser tooltip
+  - `"tooltip"`: `<abbr title tabindex class>term</abbr>` — tooltip only, no navigation, keyboard-focusable
+  - `"both"`: `<a href class><abbr title tabindex>term</abbr></a>` — anchor wrapping a semantic abbreviation
+  - Unknown values fall back to `"link"` with a warning
+
+### Configuration Options
+
+- `display-mode`: How linked terms are rendered (default: `"link"`)
+
 ## [0.0.7] - 2026-05-14
 
 ### Fixed

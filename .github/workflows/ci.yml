@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  MDBOOK_VERSION: "0.5.2"
+  MDBOOK_VERSION: "0.5.4"
 
 jobs:
   test:

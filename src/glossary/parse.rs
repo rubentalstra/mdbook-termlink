@@ -76,6 +76,11 @@ pub fn parse_definition_lists(content: &str, split_pattern: Option<&str>) -> Vec
                     current_definition_text.push_str(&text);
                 }
             }
+            Event::SoftBreak | Event::HardBreak | Event::End(TagEnd::Paragraph)
+                if in_definition =>
+            {
+                current_definition_text.push(' ');
+            }
             _ => {}
         }
     }
@@ -122,6 +127,39 @@ XPT
         );
         assert_eq!(terms[1].name(), "REST");
         assert_eq!(terms[2].definition(), Some("SAS Transport file format."));
+    }
+
+    #[test]
+    fn definition_wrapped_over_lines_keeps_a_space_between_words() {
+        let content = "Quantity\n: The amount\nof an asset that is held.\n";
+        let terms = parse_definition_lists(content, None);
+
+        assert_eq!(
+            terms[0].definition(),
+            Some("The amount of an asset that is held.")
+        );
+    }
+
+    #[test]
+    fn definition_with_a_hard_break_keeps_a_space_between_words() {
+        let content = "Quantity\n: The amount\\\nof an asset that is held.\n";
+        let terms = parse_definition_lists(content, None);
+
+        assert_eq!(
+            terms[0].definition(),
+            Some("The amount of an asset that is held.")
+        );
+    }
+
+    #[test]
+    fn definition_with_two_paragraphs_keeps_a_space_between_them() {
+        let content = "Quantity\n: The amount of an asset.\n\n    It is held, not owed.\n";
+        let terms = parse_definition_lists(content, None);
+
+        assert_eq!(
+            terms[0].definition(),
+            Some("The amount of an asset. It is held, not owed.")
+        );
     }
 
     #[test]

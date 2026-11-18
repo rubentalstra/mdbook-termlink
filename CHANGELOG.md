@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Definitions that wrap over lines or paragraphs**: a soft or hard line break and the end of a paragraph inside a definition are read as a space. Words on either side of a break were joined ("amountof"), in the tooltip and in the definition the preprocessor keeps.
+
 ## [0.1.1] - 2026-05-15
 
 ### Added

@@ -126,7 +126,10 @@ XPT
 
     #[test]
     fn parses_empty_content_to_no_terms() {
-        assert!(parse_definition_lists("# Just a heading\n\nBody text.", None).is_empty());
+        assert_eq!(
+            parse_definition_lists("# Just a heading\n\nBody text.", None),
+            [] as [Term; 0]
+        );
     }
 
     #[test]
